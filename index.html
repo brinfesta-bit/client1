@@ -27,6 +27,26 @@
 <div id="root"></div>
 
 <script>
+// --- ícones simplificados (emoji) para rodar sem lucide-react ---
+function ArrowLeft(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "←"); }
+function Check(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "✓"); }
+function ChevronRight(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "→"); }
+function CreditCard(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "💳"); }
+function Droplets(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "💧"); }
+function Facebook(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "f"); }
+function Instagram(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "📷"); }
+function Loader2(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "⏳"); }
+function MessageCircle(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "💬"); }
+function Minus(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "−"); }
+function PartyPopper(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "🎉"); }
+function Phone(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "📞"); }
+function Plus(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "+"); }
+function QrCode(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "📷"); }
+function Receipt(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "🧾"); }
+function ShoppingCart(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "🛒"); }
+function User(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "👤"); }
+function X(props) { return React.createElement("span", { style: { fontSize: (props && props.size ? props.size : 16) + "px", lineHeight: 1, display: "inline-block" } }, "✕"); }
+
 // ============================================================
 // FIREBASE SETUP
 // Projeto: tropical-bar-gaibu
@@ -83,7 +103,7 @@ function useFirebase() {
 const MENU = {
   bebidas: {
     label: "Bebidas",
-    icon: Beer,
+    icon: "🍺",
     items: [{
       id: "b1",
       name: "Cerveja 600ml",
@@ -183,7 +203,7 @@ const MENU = {
   },
   drinks: {
     label: "Drinks",
-    icon: Martini,
+    icon: "🍹",
     items: [{
       id: "d1",
       name: "Caipirinha c/ Cachaça",
@@ -283,7 +303,7 @@ const MENU = {
   },
   petiscos: {
     label: "Petiscos",
-    icon: Fish,
+    icon: "🐟",
     items: [{
       id: "p1",
       name: "Peixe Anchova",
@@ -1708,9 +1728,7 @@ function TropicalBarApp() {
         fontFamily: "'Baloo 2', cursive",
         boxShadow: active ? "0 4px 12px rgba(255,107,53,0.35)" : "none"
       }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      size: 16
-    }), " ", cat.label);
+    }, /*#__PURE__*/React.createElement("span", null, Icon), " ", cat.label);
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "12px 18px",
