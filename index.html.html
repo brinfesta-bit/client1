@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tropical Bar - Cardápio</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #F7F4ED; }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ::-webkit-scrollbar { display: none; }
+  #root { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+// ============================================================
+// FIREBASE — Projeto: tropical-bar-gaibu
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBQwSFa7V8tP56pU2kbRVL_vgRu9v5N0YM",
+  authDomain: "tropical-bar-gaibu.firebaseapp.com",
+  projectId: "tropical-bar-gaibu",
+  storageBucket: "tropical-bar-gaibu.firebasestorage.app",
+  messagingSenderId: "329641959238",
+  appId: "1:329641959238:web:60d15e85125e8f05604f47",
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+function useFirebase() {
+  const [ready, setReady] = useState(false);
+  const [db, setDb] = useState(null);
+  const [authError, setAuthError] = useState(null);
+
+  useEffect(() => {
+    firebase.auth().signInAnonymously()
+      .then(() => {
+        setDb(firebase.firestore());
+        setReady(true);
+      })
+      .catch((e) => {
+        console.error("Erro de autenticação:", e);
+        setAuthError(e.message);
+        setReady(true);
+      });
+  }, []);
+
+  return { db, ready, authError };
+}
+
+// ---------- DADOS DO CARDÁPIO (Tropical Bar - Gaibu) ----------
+const MENU = {
+  bebidas: { label: "Bebidas", emoji: "🍺", items: [
+    { id: "b1", name: "Cerveja 600ml", desc: "Itaipava, Petra, Skol ou Brahma", price: 10 },
+    { id: "b2", name: "Cerveja Itaipava 1L", desc: "Garrafa de 1 litro", price: 12 },
+    { id: "b3", name: "Cerveja Budweiser ou Brahma 1L", desc: "Garrafa de 1 litro", price: 14 },
+    { id: "b4", name: "Cerveja Heineken 330ml", desc: "Long neck", price: 13 },
+    { id: "b5", name: "Cerveja Heineken Zero 330ml", desc: "Sem álcool", price: 13 },
+    { id: "b6", name: "Cerveja Heineken 600ml", desc: "Garrafa grande", price: 18 },
+    { id: "b7", name: "Cerveja Budweiser 330ml", desc: "Long neck", price: 13 },
+    { id: "b8", name: "Cerveja Brahma sem Álcool", desc: "Lata", price: 8 },
+    { id: "b9", name: "Refrigerante Lata", desc: "", price: 7 },
+    { id: "b10", name: "Refrigerante 1 Litro", desc: "", price: 13 },
+    { id: "b11", name: "Refrigerante 2 Litros", desc: "", price: 23 },
+    { id: "b12", name: "Água", desc: "", price: 7 },
+    { id: "b13", name: "Água Mineral sem Gás", desc: "", price: 4.5 },
+    { id: "b14", name: "Água Mineral com Gás", desc: "", price: 7 },
+    { id: "b15", name: "Água Tônica", desc: "", price: 7 },
+    { id: "b16", name: "Água Mineral 1,5L", desc: "", price: 12 },
+    { id: "b17", name: "Suco com Leite", desc: "Diversos sabores", price: 15 },
+    { id: "b18", name: "Suco sem Leite", desc: "Diversos sabores", price: 13 },
+    { id: "b19", name: "Jarra de Suco", desc: "", price: 28 },
+  ]},
+  drinks: { label: "Drinks", emoji: "🍹", items: [
+    { id: "d1", name: "Caipirinha c/ Cachaça", desc: "400ml", price: 15 },
+    { id: "d2", name: "Caipiroska c/ Vodka", desc: "400ml", price: 18 },
+    { id: "d3", name: "Caipifruta Nevada", desc: "400ml", price: 25 },
+    { id: "d4", name: "Rum Montila Dose", desc: "", price: 10 },
+    { id: "d5", name: "Rum Montila Copo", desc: "", price: 25 },
+    { id: "d6", name: "Vodka Orloff Dose", desc: "", price: 8 },
+    { id: "d7", name: "Vodka Copo", desc: "", price: 15 },
+    { id: "d8", name: "Smirnoff Ice Long Neck", desc: "275ml", price: 12 },
+    { id: "d9", name: "Alcatrão Dose", desc: "", price: 6 },
+    { id: "d10", name: "Alcatrão Copo", desc: "", price: 14 },
+    { id: "d11", name: "Pitú Dose", desc: "", price: 5 },
+    { id: "d12", name: "Pitú Copo", desc: "", price: 12 },
+    { id: "d13", name: "Pitú Latão", desc: "473ml", price: 17 },
+    { id: "d14", name: "Campari Dose", desc: "", price: 10 },
+    { id: "d15", name: "Campari Copo", desc: "", price: 25 },
+    { id: "d16", name: "Whisky Teacher's ou Passport Dose", desc: "", price: 12 },
+    { id: "d17", name: "Whisky Teacher's ou Passport Copo", desc: "", price: 28 },
+    { id: "d18", name: "Energético Red Bull ou Monster", desc: "", price: 18 },
+    { id: "d19", name: "Coco Verde", desc: "Unidade", price: 7 },
+  ]},
+  petiscos: { label: "Petiscos", emoji: "🐟", items: [
+    { id: "p1", name: "Peixe Anchova", desc: "Acompanha batata frita ou macaxeira e salada · a partir de", price: 80 },
+    { id: "p2", name: "Peixe Anchova + Salada + Refri 1L", desc: "Combo completo", price: 120 },
+    { id: "p3", name: "Peixe Corvina", desc: "Acompanha batata frita ou macaxeira e salada · a partir de", price: 100 },
+    { id: "p4", name: "Peixe Cioba P", desc: "Acompanha batata frita ou macaxeira e salada", price: 140 },
+    { id: "p5", name: "Peixe Cioba G", desc: "Acompanha batata frita ou macaxeira e salada", price: 170 },
+    { id: "p6", name: "Agulha Preta com Salada e Fritas", desc: "08 unidades", price: 75 },
+    { id: "p7", name: "Peixe em Postas com Fritas", desc: "", price: 85 },
+    { id: "p8", name: "Camarão ao Alho e Óleo com Fritas", desc: "", price: 85 },
+    { id: "p9", name: "Calabresa com Salada e Fritas", desc: "", price: 85 },
+    { id: "p10", name: "Carne de Sol com Fritas", desc: "", price: 85 },
+    { id: "p11", name: "Arrumadinho Carne de Sol ou Charque P", desc: "", price: 100 },
+    { id: "p12", name: "Arrumadinho Carne de Sol ou Charque G", desc: "", price: 120 },
+    { id: "p13", name: "Frango à Passarinho com Fritas e Salada", desc: "", price: 100 },
+    { id: "p14", name: "Caldinho", desc: "Feijão, marisco ou camarão", price: 10 },
+    { id: "p15", name: "Batata Frita Porção P", desc: "", price: 30 },
+    { id: "p16", name: "Batata Frita Porção G", desc: "", price: 50 },
+    { id: "p17", name: "Macaxeira Frita Porção P", desc: "", price: 28 },
+    { id: "p18", name: "Macaxeira Frita Porção G", desc: "", price: 45 },
+    { id: "p19", name: "Porção Mista (Macaxeira + Batata) P", desc: "", price: 40 },
+    { id: "p20", name: "Porção Mista (Macaxeira + Batata) G", desc: "", price: 60 },
+    { id: "p21", name: "Porção Extra", desc: "Arroz, macarrão, salada ou feijão", price: 18 },
+    { id: "p22", name: "Qualquer Petisco Meia Porção", desc: "", price: 70 },
+  ]},
+};
+
+const PIX_KEY = "(81) 98674-7499";
+const PIX_NAME = "Luciana Bezerra da Silva";
+const SOCIAL = {
+  whatsapp: "https://wa.me/5581986747499",
+  instagram: "https://instagram.com/tropicalbargaibu",
+  facebook: "https://facebook.com/tropicalbargaibu",
+};
+
+const fmt = (n) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+
+function getMesaFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("mesa") || "1";
+}
+
+function WaveDivider({ fill = "#F7F4ED" }) {
+  return (
+    <svg viewBox="0 0 1440 60" preserveAspectRatio="none" style={{ width: "100%", display: "block" }}>
+      <path d="M0,32 C 240,60 480,0 720,18 C 960,36 1200,8 1440,28 L1440,60 L0,60 Z" fill={fill} />
+    </svg>
+  );
+}
+
+function LoginScreen({ mesa, onLogin }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+
+  const formatPhone = (v) => {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (name.trim().length < 2) return setError("Digite seu nome completo");
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) return setError("Digite um telefone válido com DDD");
+    setError("");
+    onLogin({ name: name.trim(), phone: digits });
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(165deg, #0B4F6C 0%, #0E6B8F 45%, #1F8A70 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: "-60px", right: "-60px", width: "220px", height: "220px", borderRadius: "50%", background: "radial-gradient(circle, #FFD23F 0%, rgba(255,210,63,0.4) 60%, transparent 80%)" }} />
+      <div style={{ position: "relative", zIndex: 2, width: "100%", maxWidth: "380px" }}>
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "72px", height: "72px", borderRadius: "20px", background: "rgba(255,255,255,0.15)", marginBottom: "16px", border: "1px solid rgba(255,255,255,0.25)" }}>
+            <span style={{ fontSize: "36px" }}>🌴</span>
+          </div>
+          <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "#FFD23F", fontSize: "34px", margin: 0 }}>Tropical Bar</h1>
+          <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "14.5px", marginTop: "6px", fontStyle: "italic" }}>Onde o atendimento faz a diferença</p>
+        </div>
+        <div style={{ background: "#F7F4ED", borderRadius: "24px", padding: "28px 24px", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
+            <div style={{ background: "#FF6B35", color: "white", fontWeight: 700, fontSize: "13px", padding: "6px 14px", borderRadius: "999px", fontFamily: "'Baloo 2', cursive" }}>📷 Mesa {mesa}</div>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "#1A2B2E", marginBottom: "6px", display: "block" }}>Seu nome</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Como podemos te chamar?"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: "12px", border: "1.5px solid #D8D2C2", fontSize: "15px", outline: "none", marginBottom: "16px", fontFamily: "inherit" }} />
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "#1A2B2E", marginBottom: "6px", display: "block" }}>Seu telefone</label>
+            <input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="(81) 98674-7499" inputMode="numeric"
+              style={{ width: "100%", padding: "12px 14px", borderRadius: "12px", border: "1.5px solid #D8D2C2", fontSize: "15px", outline: "none", marginBottom: "20px", fontFamily: "inherit" }} />
+            {error && <p style={{ color: "#D64545", fontSize: "13px", marginBottom: "14px" }}>{error}</p>}
+            <button type="submit" style={{ width: "100%", background: "#FF6B35", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontSize: "16px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", cursor: "pointer" }}>
+              Ver cardápio →
+            </button>
+          </form>
+        </div>
+        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.6)", fontSize: "12px", marginTop: "20px" }}>Cada mesa tem seu próprio QR code · Sem precisar chamar o garçom</p>
+      </div>
+    </div>
+  );
+}
+
+function MenuItemCard({ item, qty, onAdd, onRemove }) {
+  return (
+    <div style={{ background: "white", borderRadius: "16px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 2px 8px rgba(11,79,108,0.08)", border: "1px solid #EEEAE0" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1A2B2E", margin: 0, fontFamily: "'Baloo 2', cursive" }}>{item.name}</h3>
+        {item.desc && <p style={{ fontSize: "12px", color: "#7A7568", margin: "3px 0 0", lineHeight: 1.35 }}>{item.desc}</p>}
+        <p style={{ fontSize: "15px", fontWeight: 700, color: "#0B4F6C", margin: "6px 0 0" }}>{fmt(item.price)}</p>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+        {qty > 0 && (
+          <>
+            <button onClick={() => onRemove(item.id)} style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #FF6B35", background: "white", color: "#FF6B35", cursor: "pointer", fontSize: "16px" }}>−</button>
+            <span style={{ minWidth: "20px", textAlign: "center", fontWeight: 700, color: "#1A2B2E" }}>{qty}</span>
+          </>
+        )}
+        <button onClick={() => onAdd(item.id)} style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#FF6B35", color: "white", cursor: "pointer", boxShadow: "0 3px 8px rgba(255,107,53,0.4)", fontSize: "16px" }}>+</button>
+      </div>
+    </div>
+  );
+}
+
+function CartSheet({ open, onClose, cartItems, onAdd, onRemove, onConfirm, total, sending }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(11,30,40,0.5)" }} />
+      <div style={{ position: "relative", background: "#F7F4ED", borderRadius: "24px 24px 0 0", maxHeight: "78vh", display: "flex", flexDirection: "column", boxShadow: "0 -10px 40px rgba(0,0,0,0.3)", maxWidth: "480px", margin: "0 auto", width: "100%" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #E5E0D4", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "20px", margin: 0, color: "#1A2B2E" }}>🛒 Seu pedido</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#7A7568", fontSize: "22px" }}>✕</button>
+        </div>
+        <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1 }}>
+          {cartItems.length === 0 ? (
+            <p style={{ color: "#7A7568", textAlign: "center", padding: "30px 0" }}>Seu carrinho está vazio 🏖️</p>
+          ) : (
+            cartItems.map(({ item, qty }) => (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #EEEAE0" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#1A2B2E" }}>{item.name}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#0B4F6C", fontWeight: 600 }}>{fmt(item.price)} × {qty} = {fmt(item.price * qty)}</p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button onClick={() => onRemove(item.id)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid #FF6B35", background: "white", color: "#FF6B35", cursor: "pointer" }}>−</button>
+                  <span style={{ minWidth: "16px", textAlign: "center", fontWeight: 700, fontSize: "13px" }}>{qty}</span>
+                  <button onClick={() => onAdd(item.id)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "none", background: "#FF6B35", color: "white", cursor: "pointer" }}>+</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div style={{ padding: "16px 20px 24px", borderTop: "1px solid #E5E0D4", background: "white" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+            <span style={{ fontWeight: 600, color: "#1A2B2E" }}>Total</span>
+            <span style={{ fontWeight: 800, fontSize: "19px", color: "#0B4F6C" }}>{fmt(total)}</span>
+          </div>
+          <button disabled={cartItems.length === 0 || sending} onClick={onConfirm}
+            style={{ width: "100%", background: cartItems.length && !sending ? "#1F8A70" : "#C9C4B6", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontSize: "16px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", cursor: cartItems.length ? "pointer" : "not-allowed" }}>
+            {sending ? <span className="spin">⏳</span> : "✓"} {sending ? "Enviando..." : "Enviar pedido ao garçom"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentScreen({ total, onPaid, paymentStatus, paymentMethod }) {
+  const [method, setMethod] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  if (paymentStatus === "paid") return null;
+
+  if (paymentStatus === "aguardando_confirmacao") {
+    return (
+      <div style={{ padding: "40px 24px", textAlign: "center" }}>
+        <div className="spin" style={{ fontSize: "32px", marginBottom: "16px" }}>⏳</div>
+        <p style={{ fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive", fontSize: "16px" }}>
+          Aguardando o garçom confirmar seu pagamento via {paymentMethod === "pix" ? "Pix" : "cartão"}...
+        </p>
+      </div>
+    );
+  }
+
+  const handleCardRequest = () => {
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      onPaid("cartao", "aguardando_confirmacao");
+    }, 800);
+  };
+
+  const handlePixConfirm = () => onPaid("pix", "aguardando_confirmacao");
+
+  const copyPix = () => {
+    navigator.clipboard?.writeText(PIX_KEY).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ padding: "20px 18px 90px" }}>
+      <div style={{ background: "white", borderRadius: "18px", padding: "20px", marginBottom: "18px", boxShadow: "0 2px 10px rgba(11,79,108,0.08)" }}>
+        <p style={{ fontSize: "13px", color: "#7A7568", margin: 0 }}>Total da conta</p>
+        <p style={{ fontSize: "32px", fontWeight: 800, color: "#0B4F6C", margin: "4px 0 0", fontFamily: "'Baloo 2', cursive" }}>{fmt(total)}</p>
+      </div>
+
+      {!method && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <button onClick={() => setMethod("pix")} style={{ display: "flex", alignItems: "center", gap: "14px", background: "white", border: "1.5px solid #EEEAE0", borderRadius: "16px", padding: "16px", cursor: "pointer", textAlign: "left" }}>
+            <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#E6F5EF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>💧</div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive" }}>Pagar com Pix</p>
+              <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#7A7568" }}>Copie a chave e confirme depois</p>
+            </div>
+          </button>
+          <button onClick={() => setMethod("cartao")} style={{ display: "flex", alignItems: "center", gap: "14px", background: "white", border: "1.5px solid #EEEAE0", borderRadius: "16px", padding: "16px", cursor: "pointer", textAlign: "left" }}>
+            <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#FFF1E8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>💳</div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive" }}>Pagar com cartão</p>
+              <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#7A7568" }}>Crédito ou débito na maquininha do garçom</p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {method === "pix" && (
+        <div style={{ background: "white", borderRadius: "16px", padding: "20px", border: "1.5px solid #EEEAE0" }}>
+          <p style={{ fontWeight: 700, color: "#1A2B2E", marginTop: 0, fontFamily: "'Baloo 2', cursive" }}>Pagar com Pix</p>
+          <p style={{ fontSize: "13px", color: "#7A7568", margin: "0 0 14px" }}>Chave Pix (telefone) — {PIX_NAME}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#F7F4ED", borderRadius: "12px", padding: "12px 14px", marginBottom: "16px" }}>
+            <span style={{ fontWeight: 700, color: "#0B4F6C", flex: 1, fontSize: "15px" }}>{PIX_KEY}</span>
+            <button onClick={copyPix} style={{ background: copied ? "#1F8A70" : "#0B4F6C", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}>{copied ? "Copiado!" : "Copiar"}</button>
+          </div>
+          <p style={{ fontSize: "12.5px", color: "#7A7568", marginBottom: "16px" }}>Faça o Pix de {fmt(total)} e toque no botão abaixo. O garçom vai confirmar o recebimento.</p>
+          <button onClick={handlePixConfirm} style={{ width: "100%", background: "#1F8A70", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", fontSize: "15px", cursor: "pointer" }}>Já fiz o Pix</button>
+          <button onClick={() => setMethod(null)} style={{ width: "100%", background: "none", border: "none", color: "#7A7568", padding: "12px", fontSize: "13px", cursor: "pointer" }}>Voltar</button>
+        </div>
+      )}
+
+      {method === "cartao" && (
+        <div style={{ background: "white", borderRadius: "16px", padding: "20px", border: "1.5px solid #EEEAE0" }}>
+          <p style={{ fontWeight: 700, color: "#1A2B2E", marginTop: 0, fontFamily: "'Baloo 2', cursive" }}>Pagar com cartão</p>
+          <p style={{ fontSize: "13px", color: "#7A7568", margin: "0 0 16px" }}>O garçom vai até sua mesa com a maquininha para você pagar com crédito ou débito.</p>
+          <button onClick={handleCardRequest} disabled={processing} style={{ width: "100%", background: "#FF6B35", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", fontSize: "15px", cursor: "pointer" }}>
+            {processing ? "Chamando garçom..." : "Chamar garçom com a maquininha"}
+          </button>
+          <button onClick={() => setMethod(null)} style={{ width: "100%", background: "none", border: "none", color: "#7A7568", padding: "12px", fontSize: "13px", cursor: "pointer" }}>Voltar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuccessScreen({ name }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(165deg, #0B4F6C 0%, #1F8A70 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px", textAlign: "center" }}>
+      <div style={{ width: "84px", height: "84px", borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px", fontSize: "40px" }}>🎉</div>
+      <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "white", fontSize: "26px", margin: 0 }}>Obrigada, {name.split(" ")[0]}!</h1>
+      <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "14.5px", marginTop: "8px", maxWidth: "280px" }}>Seu pagamento foi confirmado. Esperamos te ver de novo em breve, volte sempre! 🌴</p>
+      <div style={{ display: "flex", gap: "14px", marginTop: "32px" }}>
+        <a href={SOCIAL.whatsapp} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#25D366", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", textDecoration: "none" }}>💬</a>
+        <a href={SOCIAL.instagram} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#E1306C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", textDecoration: "none" }}>📷</a>
+        <a href={SOCIAL.facebook} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#1877F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "white", textDecoration: "none", fontWeight: 700 }}>f</a>
+      </div>
+      <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "12px", marginTop: "28px" }}>Siga a gente e fique por dentro das novidades da praia</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    pendente: { label: "Aguardando", color: "#FF6B35", bg: "#FFF1E8" },
+    preparo: { label: "Em preparo", color: "#0B4F6C", bg: "#E6F0F5" },
+    entregue: { label: "Entregue", color: "#1F8A70", bg: "#E6F5EF" },
+  };
+  const s = map[status] || map.pendente;
+  return <span style={{ fontSize: "11.5px", fontWeight: 700, color: s.color, background: s.bg, padding: "4px 10px", borderRadius: "999px" }}>{s.label}</span>;
+}
+
+function App() {
+  const mesa = getMesaFromURL();
+  const { db, ready, authError } = useFirebase();
+  const [user, setUser] = useState(null);
+  const [cart, setCart] = useState({});
+  const [pedidos, setPedidos] = useState([]);
+  const [tableDoc, setTableDoc] = useState({ paymentStatus: "unpaid", paymentMethod: null });
+  const [activeCat, setActiveCat] = useState("bebidas");
+  const [cartOpen, setCartOpen] = useState(false);
+  const [view, setView] = useState("menu");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = db.collection("mesas").doc(mesa).onSnapshot((doc) => {
+      if (doc.exists) setTableDoc(doc.data());
+    }, (err) => console.error("Erro listener mesa:", err));
+    return unsub;
+  }, [db, mesa]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = db.collection("mesas").doc(mesa).collection("pedidos")
+      .orderBy("sentAt", "asc")
+      .onSnapshot((snap) => {
+        setPedidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }, (err) => console.error("Erro listener pedidos:", err));
+    return unsub;
+  }, [db, mesa]);
+
+  const allItems = Object.values(MENU).flatMap((c) => c.items);
+  const addToCart = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
+  const removeFromCart = (id) => setCart((c) => {
+    const next = { ...c, [id]: Math.max(0, (c[id] || 0) - 1) };
+    if (next[id] === 0) delete next[id];
+    return next;
+  });
+
+  const cartItems = Object.entries(cart).map(([id, qty]) => ({ item: allItems.find((i) => i.id === id), qty }));
+  const cartTotal = cartItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
+  const cartCount = Object.values(cart).reduce((s, q) => s + q, 0);
+  const orderTotal = pedidos.reduce((s, i) => s + i.price * i.qty, 0);
+
+  const confirmOrder = async () => {
+    if (!db) return;
+    setSending(true);
+    try {
+      const tableRef = db.collection("mesas").doc(mesa);
+      await tableRef.set({ cliente: user, paymentStatus: tableDoc.paymentStatus || "unpaid" }, { merge: true });
+      const batch = db.batch();
+      cartItems.forEach(({ item, qty }) => {
+        const ref = tableRef.collection("pedidos").doc();
+        batch.set(ref, {
+          itemId: item.id,
+          name: item.name,
+          price: item.price,
+          qty,
+          status: "pendente",
+          sentAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      await batch.commit();
+      setCart({});
+      setCartOpen(false);
+    } catch (e) {
+      console.error("Erro ao enviar pedido:", e);
+      alert("Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handlePaid = async (method, status) => {
+    if (!db) return;
+    await db.collection("mesas").doc(mesa).set({ paymentMethod: method, paymentStatus: status }, { merge: true });
+  };
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="spin" style={{ fontSize: "32px" }}>🌴</div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", textAlign: "center" }}>
+        <p style={{ color: "white", fontWeight: 700, marginBottom: "8px" }}>Não foi possível conectar</p>
+        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>Verifique se o login Anônimo está ativado no Firebase Authentication.</p>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen mesa={mesa} onLogin={setUser} />;
+  if (tableDoc.paymentStatus === "paid") return <SuccessScreen name={user.name} />;
+
+  return (
+    <div style={{ fontFamily: "'Inter', sans-serif", background: "#F7F4ED", minHeight: "100vh", paddingBottom: cartCount > 0 ? "84px" : "0" }}>
+      <div style={{ background: "linear-gradient(135deg, #0B4F6C, #0E6B8F)", padding: "18px 18px 0", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "-30px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,210,63,0.25)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+          <div>
+            <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "12.5px", margin: 0 }}>Olá, {user.name.split(" ")[0]} 👋</p>
+            <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "#FFD23F", fontSize: "24px", margin: "2px 0 0" }}>Tropical Bar</h1>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.15)", color: "white", fontWeight: 700, fontSize: "12.5px", padding: "8px 12px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.25)" }}>📷 Mesa {mesa}</div>
+        </div>
+
+        {pedidos.length > 0 && (
+          <button onClick={() => setView(view === "payment" ? "menu" : "payment")}
+            style={{ marginTop: "14px", width: "100%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "14px", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", color: "white", cursor: "pointer" }}>
+            <span style={{ fontSize: "13px" }}>🧾 Sua conta até agora: <strong>{fmt(orderTotal)}</strong></span>
+            <span>→</span>
+          </button>
+        )}
+
+        <div style={{ height: "16px" }} />
+        <WaveDivider fill="#F7F4ED" />
+      </div>
+
+      {view === "payment" ? (
+        <>
+          <div style={{ padding: "16px 18px 0", display: "flex", alignItems: "center", gap: "10px" }}>
+            <button onClick={() => setView("menu")} style={{ background: "white", border: "1px solid #EEEAE0", borderRadius: "10px", width: "36px", height: "36px", cursor: "pointer" }}>←</button>
+            <h2 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "19px", color: "#1A2B2E", margin: 0 }}>Fechar a conta</h2>
+          </div>
+          <div style={{ padding: "0 18px" }}>
+            {pedidos.map((i) => (
+              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: "13.5px", color: "#3A3530" }}>
+                <span>{i.qty}× {i.name}</span>
+                <span style={{ fontWeight: 600 }}>{fmt(i.price * i.qty)}</span>
+              </div>
+            ))}
+          </div>
+          <PaymentScreen total={orderTotal} onPaid={handlePaid} paymentStatus={tableDoc.paymentStatus} paymentMethod={tableDoc.paymentMethod} />
+        </>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: "10px", padding: "14px 18px 6px", overflowX: "auto" }}>
+            {Object.entries(MENU).map(([key, cat]) => {
+              const active = activeCat === key;
+              return (
+                <button key={key} onClick={() => setActiveCat(key)}
+                  style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px", borderRadius: "999px", border: active ? "none" : "1.5px solid #E5E0D4", background: active ? "#FF6B35" : "white", color: active ? "white" : "#5A5648", fontWeight: 700, fontSize: "13.5px", cursor: "pointer", fontFamily: "'Baloo 2', cursive" }}>
+                  {cat.emoji} {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ padding: "12px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {MENU[activeCat].items.map((item) => (
+              <MenuItemCard key={item.id} item={item} qty={cart[item.id] || 0} onAdd={addToCart} onRemove={removeFromCart} />
+            ))}
+          </div>
+
+          {pedidos.length > 0 && (
+            <div style={{ padding: "4px 18px 24px" }}>
+              <h3 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "15px", color: "#1A2B2E", margin: "8px 0" }}>Pedidos enviados</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {pedidos.slice().reverse().map((i) => (
+                  <div key={i.id} style={{ background: "white", borderRadius: "12px", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #EEEAE0" }}>
+                    <span style={{ fontSize: "13.5px", color: "#1A2B2E" }}>{i.qty}× {i.name}</span>
+                    <StatusBadge status={i.status} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {cartCount > 0 && view === "menu" && (
+        <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: "480px", padding: "12px 18px 18px", background: "linear-gradient(to top, #F7F4ED 70%, transparent)" }}>
+          <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: "#1A2B2E", color: "white", border: "none", borderRadius: "16px", padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", boxShadow: "0 10px 24px rgba(0,0,0,0.25)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 700, fontFamily: "'Baloo 2', cursive" }}>
+              <span style={{ background: "#FF6B35", borderRadius: "50%", width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12.5px" }}>{cartCount}</span>
+              Ver pedido
+            </span>
+            <span style={{ fontWeight: 800 }}>{fmt(cartTotal)}</span>
+          </button>
+        </div>
+      )}
+
+      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onConfirm={confirmOrder} total={cartTotal} sending={sending} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
