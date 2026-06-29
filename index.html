@@ -11,7 +11,6 @@
 
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -27,11 +26,13 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
-const { useState, useEffect } = React;
-
+<script>
 // ============================================================
-// FIREBASE — Projeto: tropical-bar-gaibu
+// FIREBASE SETUP
+// Projeto: tropical-bar-gaibu
+// 1. Crie o projeto em https://console.firebase.google.com
+// 2. Ative Firestore Database (modo produção) e Authentication > Anonymous
+// 3. Cole suas credenciais reais abaixo (Project Settings > General > Seus apps > SDK)
 // ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyBQwSFa7V8tP56pU2kbRVL_vgRu9v5N0YM",
@@ -39,412 +40,1444 @@ const firebaseConfig = {
   projectId: "tropical-bar-gaibu",
   storageBucket: "tropical-bar-gaibu.firebasestorage.app",
   messagingSenderId: "329641959238",
-  appId: "1:329641959238:web:60d15e85125e8f05604f47",
+  appId: "1:329641959238:web:60d15e85125e8f05604f47"
 };
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-
+// Carrega o Firebase via CDN (compat, sem build step) — injeta scripts uma vez
 function useFirebase() {
   const [ready, setReady] = useState(false);
   const [db, setDb] = useState(null);
-  const [authError, setAuthError] = useState(null);
-
   useEffect(() => {
-    firebase.auth().signInAnonymously()
-      .then(() => {
-        setDb(firebase.firestore());
-        setReady(true);
-      })
-      .catch((e) => {
-        console.error("Erro de autenticação:", e);
-        setAuthError(e.message);
-        setReady(true);
-      });
+    const existing = window.firebase;
+    function init() {
+      if (!window.firebase.apps.length) {
+        window.firebase.initializeApp(firebaseConfig);
+      }
+      window.firebase.auth().signInAnonymously().catch(e => console.error("Auth erro:", e));
+      setDb(window.firebase.firestore());
+      setReady(true);
+    }
+    if (existing && existing.firestore) {
+      init();
+      return;
+    }
+    const scripts = ["https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js", "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"];
+    let loaded = 0;
+    scripts.forEach(src => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => {
+        loaded += 1;
+        if (loaded === scripts.length) init();
+      };
+      document.head.appendChild(s);
+    });
   }, []);
-
-  return { db, ready, authError };
+  return {
+    db,
+    ready
+  };
 }
 
 // ---------- DADOS DO CARDÁPIO (Tropical Bar - Gaibu) ----------
 const MENU = {
-  bebidas: { label: "Bebidas", emoji: "🍺", items: [
-    { id: "b1", name: "Cerveja 600ml", desc: "Itaipava, Petra, Skol ou Brahma", price: 10 },
-    { id: "b2", name: "Cerveja Itaipava 1L", desc: "Garrafa de 1 litro", price: 12 },
-    { id: "b3", name: "Cerveja Budweiser ou Brahma 1L", desc: "Garrafa de 1 litro", price: 14 },
-    { id: "b4", name: "Cerveja Heineken 330ml", desc: "Long neck", price: 13 },
-    { id: "b5", name: "Cerveja Heineken Zero 330ml", desc: "Sem álcool", price: 13 },
-    { id: "b6", name: "Cerveja Heineken 600ml", desc: "Garrafa grande", price: 18 },
-    { id: "b7", name: "Cerveja Budweiser 330ml", desc: "Long neck", price: 13 },
-    { id: "b8", name: "Cerveja Brahma sem Álcool", desc: "Lata", price: 8 },
-    { id: "b9", name: "Refrigerante Lata", desc: "", price: 7 },
-    { id: "b10", name: "Refrigerante 1 Litro", desc: "", price: 13 },
-    { id: "b11", name: "Refrigerante 2 Litros", desc: "", price: 23 },
-    { id: "b12", name: "Água", desc: "", price: 7 },
-    { id: "b13", name: "Água Mineral sem Gás", desc: "", price: 4.5 },
-    { id: "b14", name: "Água Mineral com Gás", desc: "", price: 7 },
-    { id: "b15", name: "Água Tônica", desc: "", price: 7 },
-    { id: "b16", name: "Água Mineral 1,5L", desc: "", price: 12 },
-    { id: "b17", name: "Suco com Leite", desc: "Diversos sabores", price: 15 },
-    { id: "b18", name: "Suco sem Leite", desc: "Diversos sabores", price: 13 },
-    { id: "b19", name: "Jarra de Suco", desc: "", price: 28 },
-  ]},
-  drinks: { label: "Drinks", emoji: "🍹", items: [
-    { id: "d1", name: "Caipirinha c/ Cachaça", desc: "400ml", price: 15 },
-    { id: "d2", name: "Caipiroska c/ Vodka", desc: "400ml", price: 18 },
-    { id: "d3", name: "Caipifruta Nevada", desc: "400ml", price: 25 },
-    { id: "d4", name: "Rum Montila Dose", desc: "", price: 10 },
-    { id: "d5", name: "Rum Montila Copo", desc: "", price: 25 },
-    { id: "d6", name: "Vodka Orloff Dose", desc: "", price: 8 },
-    { id: "d7", name: "Vodka Copo", desc: "", price: 15 },
-    { id: "d8", name: "Smirnoff Ice Long Neck", desc: "275ml", price: 12 },
-    { id: "d9", name: "Alcatrão Dose", desc: "", price: 6 },
-    { id: "d10", name: "Alcatrão Copo", desc: "", price: 14 },
-    { id: "d11", name: "Pitú Dose", desc: "", price: 5 },
-    { id: "d12", name: "Pitú Copo", desc: "", price: 12 },
-    { id: "d13", name: "Pitú Latão", desc: "473ml", price: 17 },
-    { id: "d14", name: "Campari Dose", desc: "", price: 10 },
-    { id: "d15", name: "Campari Copo", desc: "", price: 25 },
-    { id: "d16", name: "Whisky Teacher's ou Passport Dose", desc: "", price: 12 },
-    { id: "d17", name: "Whisky Teacher's ou Passport Copo", desc: "", price: 28 },
-    { id: "d18", name: "Energético Red Bull ou Monster", desc: "", price: 18 },
-    { id: "d19", name: "Coco Verde", desc: "Unidade", price: 7 },
-  ]},
-  petiscos: { label: "Petiscos", emoji: "🐟", items: [
-    { id: "p1", name: "Peixe Anchova", desc: "Acompanha batata frita ou macaxeira e salada · a partir de", price: 80 },
-    { id: "p2", name: "Peixe Anchova + Salada + Refri 1L", desc: "Combo completo", price: 120 },
-    { id: "p3", name: "Peixe Corvina", desc: "Acompanha batata frita ou macaxeira e salada · a partir de", price: 100 },
-    { id: "p4", name: "Peixe Cioba P", desc: "Acompanha batata frita ou macaxeira e salada", price: 140 },
-    { id: "p5", name: "Peixe Cioba G", desc: "Acompanha batata frita ou macaxeira e salada", price: 170 },
-    { id: "p6", name: "Agulha Preta com Salada e Fritas", desc: "08 unidades", price: 75 },
-    { id: "p7", name: "Peixe em Postas com Fritas", desc: "", price: 85 },
-    { id: "p8", name: "Camarão ao Alho e Óleo com Fritas", desc: "", price: 85 },
-    { id: "p9", name: "Calabresa com Salada e Fritas", desc: "", price: 85 },
-    { id: "p10", name: "Carne de Sol com Fritas", desc: "", price: 85 },
-    { id: "p11", name: "Arrumadinho Carne de Sol ou Charque P", desc: "", price: 100 },
-    { id: "p12", name: "Arrumadinho Carne de Sol ou Charque G", desc: "", price: 120 },
-    { id: "p13", name: "Frango à Passarinho com Fritas e Salada", desc: "", price: 100 },
-    { id: "p14", name: "Caldinho", desc: "Feijão, marisco ou camarão", price: 10 },
-    { id: "p15", name: "Batata Frita Porção P", desc: "", price: 30 },
-    { id: "p16", name: "Batata Frita Porção G", desc: "", price: 50 },
-    { id: "p17", name: "Macaxeira Frita Porção P", desc: "", price: 28 },
-    { id: "p18", name: "Macaxeira Frita Porção G", desc: "", price: 45 },
-    { id: "p19", name: "Porção Mista (Macaxeira + Batata) P", desc: "", price: 40 },
-    { id: "p20", name: "Porção Mista (Macaxeira + Batata) G", desc: "", price: 60 },
-    { id: "p21", name: "Porção Extra", desc: "Arroz, macarrão, salada ou feijão", price: 18 },
-    { id: "p22", name: "Qualquer Petisco Meia Porção", desc: "", price: 70 },
-  ]},
+  bebidas: {
+    label: "Bebidas",
+    icon: Beer,
+    items: [{
+      id: "b1",
+      name: "Cerveja 600ml",
+      desc: "Itaipava, Petra, Skol ou Brahma",
+      price: 10
+    }, {
+      id: "b2",
+      name: "Cerveja Itaipava 1L",
+      desc: "Garrafa de 1 litro",
+      price: 12
+    }, {
+      id: "b3",
+      name: "Cerveja Budweiser ou Brahma 1L",
+      desc: "Garrafa de 1 litro",
+      price: 14
+    }, {
+      id: "b4",
+      name: "Cerveja Heineken 330ml",
+      desc: "Long neck",
+      price: 13
+    }, {
+      id: "b5",
+      name: "Cerveja Heineken Zero 330ml",
+      desc: "Sem álcool",
+      price: 13
+    }, {
+      id: "b6",
+      name: "Cerveja Heineken 600ml",
+      desc: "Garrafa grande",
+      price: 18
+    }, {
+      id: "b7",
+      name: "Cerveja Budweiser 330ml",
+      desc: "Long neck",
+      price: 13
+    }, {
+      id: "b8",
+      name: "Cerveja Brahma sem Álcool",
+      desc: "Lata",
+      price: 8
+    }, {
+      id: "b9",
+      name: "Refrigerante Lata",
+      desc: "",
+      price: 7
+    }, {
+      id: "b10",
+      name: "Refrigerante 1 Litro",
+      desc: "",
+      price: 13
+    }, {
+      id: "b11",
+      name: "Refrigerante 2 Litros",
+      desc: "",
+      price: 23
+    }, {
+      id: "b12",
+      name: "Água",
+      desc: "",
+      price: 7
+    }, {
+      id: "b13",
+      name: "Água Mineral sem Gás",
+      desc: "",
+      price: 4.5
+    }, {
+      id: "b14",
+      name: "Água Mineral com Gás",
+      desc: "",
+      price: 7
+    }, {
+      id: "b15",
+      name: "Água Tônica",
+      desc: "",
+      price: 7
+    }, {
+      id: "b16",
+      name: "Água Mineral 1,5L",
+      desc: "",
+      price: 12
+    }, {
+      id: "b17",
+      name: "Suco com Leite",
+      desc: "Diversos sabores",
+      price: 15
+    }, {
+      id: "b18",
+      name: "Suco sem Leite",
+      desc: "Diversos sabores",
+      price: 13
+    }, {
+      id: "b19",
+      name: "Jarra de Suco",
+      desc: "",
+      price: 28
+    }]
+  },
+  drinks: {
+    label: "Drinks",
+    icon: Martini,
+    items: [{
+      id: "d1",
+      name: "Caipirinha c/ Cachaça",
+      desc: "400ml",
+      price: 15
+    }, {
+      id: "d2",
+      name: "Caipiroska c/ Vodka",
+      desc: "400ml",
+      price: 18
+    }, {
+      id: "d3",
+      name: "Caipifruta Nevada",
+      desc: "400ml",
+      price: 25
+    }, {
+      id: "d4",
+      name: "Rum Montila Dose",
+      desc: "",
+      price: 10
+    }, {
+      id: "d5",
+      name: "Rum Montila Copo",
+      desc: "",
+      price: 25
+    }, {
+      id: "d6",
+      name: "Vodka Orloff Dose",
+      desc: "",
+      price: 8
+    }, {
+      id: "d7",
+      name: "Vodka Copo",
+      desc: "",
+      price: 15
+    }, {
+      id: "d8",
+      name: "Smirnoff Ice Long Neck",
+      desc: "275ml",
+      price: 12
+    }, {
+      id: "d9",
+      name: "Alcatrão Dose",
+      desc: "",
+      price: 6
+    }, {
+      id: "d10",
+      name: "Alcatrão Copo",
+      desc: "",
+      price: 14
+    }, {
+      id: "d11",
+      name: "Pitú Dose",
+      desc: "",
+      price: 5
+    }, {
+      id: "d12",
+      name: "Pitú Copo",
+      desc: "",
+      price: 12
+    }, {
+      id: "d13",
+      name: "Pitú Latão",
+      desc: "473ml",
+      price: 17
+    }, {
+      id: "d14",
+      name: "Campari Dose",
+      desc: "",
+      price: 10
+    }, {
+      id: "d15",
+      name: "Campari Copo",
+      desc: "",
+      price: 25
+    }, {
+      id: "d16",
+      name: "Whisky Teacher's ou Passport Dose",
+      desc: "",
+      price: 12
+    }, {
+      id: "d17",
+      name: "Whisky Teacher's ou Passport Copo",
+      desc: "",
+      price: 28
+    }, {
+      id: "d18",
+      name: "Energético Red Bull ou Monster",
+      desc: "",
+      price: 18
+    }, {
+      id: "d19",
+      name: "Coco Verde",
+      desc: "Unidade",
+      price: 7
+    }]
+  },
+  petiscos: {
+    label: "Petiscos",
+    icon: Fish,
+    items: [{
+      id: "p1",
+      name: "Peixe Anchova",
+      desc: "Acompanha batata frita ou macaxeira e salada · a partir de",
+      price: 80
+    }, {
+      id: "p2",
+      name: "Peixe Anchova + Salada + Refri 1L",
+      desc: "Combo completo",
+      price: 120
+    }, {
+      id: "p3",
+      name: "Peixe Corvina",
+      desc: "Acompanha batata frita ou macaxeira e salada · a partir de",
+      price: 100
+    }, {
+      id: "p4",
+      name: "Peixe Cioba P",
+      desc: "Acompanha batata frita ou macaxeira e salada",
+      price: 140
+    }, {
+      id: "p5",
+      name: "Peixe Cioba G",
+      desc: "Acompanha batata frita ou macaxeira e salada",
+      price: 170
+    }, {
+      id: "p6",
+      name: "Agulha Preta com Salada e Fritas",
+      desc: "08 unidades",
+      price: 75
+    }, {
+      id: "p7",
+      name: "Peixe em Postas com Fritas",
+      desc: "",
+      price: 85
+    }, {
+      id: "p8",
+      name: "Camarão ao Alho e Óleo com Fritas",
+      desc: "",
+      price: 85
+    }, {
+      id: "p9",
+      name: "Calabresa com Salada e Fritas",
+      desc: "",
+      price: 85
+    }, {
+      id: "p10",
+      name: "Carne de Sol com Fritas",
+      desc: "",
+      price: 85
+    }, {
+      id: "p11",
+      name: "Arrumadinho Carne de Sol ou Charque P",
+      desc: "",
+      price: 100
+    }, {
+      id: "p12",
+      name: "Arrumadinho Carne de Sol ou Charque G",
+      desc: "",
+      price: 120
+    }, {
+      id: "p13",
+      name: "Frango à Passarinho com Fritas e Salada",
+      desc: "",
+      price: 100
+    }, {
+      id: "p14",
+      name: "Caldinho",
+      desc: "Feijão, marisco ou camarão",
+      price: 10
+    }, {
+      id: "p15",
+      name: "Batata Frita Porção P",
+      desc: "",
+      price: 30
+    }, {
+      id: "p16",
+      name: "Batata Frita Porção G",
+      desc: "",
+      price: 50
+    }, {
+      id: "p17",
+      name: "Macaxeira Frita Porção P",
+      desc: "",
+      price: 28
+    }, {
+      id: "p18",
+      name: "Macaxeira Frita Porção G",
+      desc: "",
+      price: 45
+    }, {
+      id: "p19",
+      name: "Porção Mista (Macaxeira + Batata) P",
+      desc: "",
+      price: 40
+    }, {
+      id: "p20",
+      name: "Porção Mista (Macaxeira + Batata) G",
+      desc: "",
+      price: 60
+    }, {
+      id: "p21",
+      name: "Porção Extra",
+      desc: "Arroz, macarrão, salada ou feijão",
+      price: 18
+    }, {
+      id: "p22",
+      name: "Qualquer Petisco Meia Porção",
+      desc: "",
+      price: 70
+    }]
+  }
 };
-
 const PIX_KEY = "(81) 98674-7499";
 const PIX_NAME = "Luciana Bezerra da Silva";
 const SOCIAL = {
   whatsapp: "https://wa.me/5581986747499",
   instagram: "https://instagram.com/tropicalbargaibu",
-  facebook: "https://facebook.com/tropicalbargaibu",
+  facebook: "https://facebook.com/tropicalbargaibu"
 };
-
-const fmt = (n) => `R$ ${n.toFixed(2).replace(".", ",")}`;
-
+const fmt = n => `R$ ${n.toFixed(2).replace(".", ",")}`;
 function getMesaFromURL() {
   const params = new URLSearchParams(window.location.search);
   return params.get("mesa") || "1";
 }
-
-function WaveDivider({ fill = "#F7F4ED" }) {
-  return (
-    <svg viewBox="0 0 1440 60" preserveAspectRatio="none" style={{ width: "100%", display: "block" }}>
-      <path d="M0,32 C 240,60 480,0 720,18 C 960,36 1200,8 1440,28 L1440,60 L0,60 Z" fill={fill} />
-    </svg>
-  );
+function WaveDivider({
+  fill = "#F7F4ED"
+}) {
+  return /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 1440 60",
+    preserveAspectRatio: "none",
+    style: {
+      width: "100%",
+      display: "block"
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M0,32 C 240,60 480,0 720,18 C 960,36 1200,8 1440,28 L1440,60 L0,60 Z",
+    fill: fill
+  }));
 }
 
-function LoginScreen({ mesa, onLogin }) {
+// ---------- TELA DE LOGIN ----------
+function LoginScreen({
+  mesa,
+  onLogin
+}) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
-
-  const formatPhone = (v) => {
-    const d = v.replace(/\D/g, "").slice(0, 11);
-    if (d.length <= 2) return d;
-    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = e => {
     e.preventDefault();
     if (name.trim().length < 2) return setError("Digite seu nome completo");
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 10) return setError("Digite um telefone válido com DDD");
     setError("");
-    onLogin({ name: name.trim(), phone: digits });
+    onLogin({
+      name: name.trim(),
+      phone: digits
+    });
   };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(165deg, #0B4F6C 0%, #0E6B8F 45%, #1F8A70 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: "-60px", right: "-60px", width: "220px", height: "220px", borderRadius: "50%", background: "radial-gradient(circle, #FFD23F 0%, rgba(255,210,63,0.4) 60%, transparent 80%)" }} />
-      <div style={{ position: "relative", zIndex: 2, width: "100%", maxWidth: "380px" }}>
-        <div style={{ textAlign: "center", marginBottom: "28px" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "72px", height: "72px", borderRadius: "20px", background: "rgba(255,255,255,0.15)", marginBottom: "16px", border: "1px solid rgba(255,255,255,0.25)" }}>
-            <span style={{ fontSize: "36px" }}>🌴</span>
-          </div>
-          <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "#FFD23F", fontSize: "34px", margin: 0 }}>Tropical Bar</h1>
-          <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "14.5px", marginTop: "6px", fontStyle: "italic" }}>Onde o atendimento faz a diferença</p>
-        </div>
-        <div style={{ background: "#F7F4ED", borderRadius: "24px", padding: "28px 24px", boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
-            <div style={{ background: "#FF6B35", color: "white", fontWeight: 700, fontSize: "13px", padding: "6px 14px", borderRadius: "999px", fontFamily: "'Baloo 2', cursive" }}>📷 Mesa {mesa}</div>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <label style={{ fontSize: "13px", fontWeight: 600, color: "#1A2B2E", marginBottom: "6px", display: "block" }}>Seu nome</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Como podemos te chamar?"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: "12px", border: "1.5px solid #D8D2C2", fontSize: "15px", outline: "none", marginBottom: "16px", fontFamily: "inherit" }} />
-            <label style={{ fontSize: "13px", fontWeight: 600, color: "#1A2B2E", marginBottom: "6px", display: "block" }}>Seu telefone</label>
-            <input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="(81) 98674-7499" inputMode="numeric"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: "12px", border: "1.5px solid #D8D2C2", fontSize: "15px", outline: "none", marginBottom: "20px", fontFamily: "inherit" }} />
-            {error && <p style={{ color: "#D64545", fontSize: "13px", marginBottom: "14px" }}>{error}</p>}
-            <button type="submit" style={{ width: "100%", background: "#FF6B35", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontSize: "16px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", cursor: "pointer" }}>
-              Ver cardápio →
-            </button>
-          </form>
-        </div>
-        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.6)", fontSize: "12px", marginTop: "20px" }}>Cada mesa tem seu próprio QR code · Sem precisar chamar o garçom</p>
-      </div>
-    </div>
-  );
+  const formatPhone = v => {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "linear-gradient(165deg, #0B4F6C 0%, #0E6B8F 45%, #1F8A70 100%)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "24px",
+      fontFamily: "'Inter', sans-serif",
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "-60px",
+      right: "-60px",
+      width: "220px",
+      height: "220px",
+      borderRadius: "50%",
+      background: "radial-gradient(circle, #FFD23F 0%, rgba(255,210,63,0.4) 60%, transparent 80%)",
+      filter: "blur(2px)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      zIndex: 2,
+      width: "100%",
+      maxWidth: "380px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginBottom: "28px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "72px",
+      height: "72px",
+      borderRadius: "20px",
+      background: "rgba(255,255,255,0.15)",
+      marginBottom: "16px",
+      border: "1px solid rgba(255,255,255,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: "36px"
+    }
+  }, "🌴")), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      color: "#FFD23F",
+      fontSize: "34px",
+      margin: 0,
+      letterSpacing: "0.5px",
+      textShadow: "0 2px 12px rgba(0,0,0,0.2)"
+    }
+  }, "Tropical Bar"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.85)",
+      fontSize: "14.5px",
+      marginTop: "6px",
+      fontStyle: "italic"
+    }
+  }, "Onde o atendimento faz a diferença")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#F7F4ED",
+      borderRadius: "24px",
+      padding: "28px 24px",
+      boxShadow: "0 20px 50px rgba(0,0,0,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "20px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#FF6B35",
+      color: "white",
+      fontWeight: 700,
+      fontSize: "13px",
+      padding: "6px 14px",
+      borderRadius: "999px",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, /*#__PURE__*/React.createElement(QrCode, {
+    size: 15
+  }), " Mesa ", mesa)), /*#__PURE__*/React.createElement("form", {
+    onSubmit: handleSubmit
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: "13px",
+      fontWeight: 600,
+      color: "#1A2B2E",
+      marginBottom: "6px",
+      display: "block"
+    }
+  }, "Seu nome"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      marginBottom: "16px"
+    }
+  }, /*#__PURE__*/React.createElement(User, {
+    size: 18,
+    style: {
+      position: "absolute",
+      left: "14px",
+      top: "13px",
+      color: "#0B4F6C"
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    value: name,
+    onChange: e => setName(e.target.value),
+    placeholder: "Como podemos te chamar?",
+    style: {
+      width: "100%",
+      padding: "12px 14px 12px 42px",
+      borderRadius: "12px",
+      border: "1.5px solid #D8D2C2",
+      fontSize: "15px",
+      outline: "none",
+      boxSizing: "border-box",
+      fontFamily: "inherit"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: "13px",
+      fontWeight: 600,
+      color: "#1A2B2E",
+      marginBottom: "6px",
+      display: "block"
+    }
+  }, "Seu telefone"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      marginBottom: "20px"
+    }
+  }, /*#__PURE__*/React.createElement(Phone, {
+    size: 18,
+    style: {
+      position: "absolute",
+      left: "14px",
+      top: "13px",
+      color: "#0B4F6C"
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    value: phone,
+    onChange: e => setPhone(formatPhone(e.target.value)),
+    placeholder: "(81) 98674-7499",
+    inputMode: "numeric",
+    style: {
+      width: "100%",
+      padding: "12px 14px 12px 42px",
+      borderRadius: "12px",
+      border: "1.5px solid #D8D2C2",
+      fontSize: "15px",
+      outline: "none",
+      boxSizing: "border-box",
+      fontFamily: "inherit"
+    }
+  })), error && /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#D64545",
+      fontSize: "13px",
+      marginBottom: "14px",
+      marginTop: "-8px"
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
+    type: "submit",
+    style: {
+      width: "100%",
+      background: "#FF6B35",
+      color: "white",
+      border: "none",
+      borderRadius: "14px",
+      padding: "14px",
+      fontSize: "16px",
+      fontWeight: 700,
+      fontFamily: "'Baloo 2', cursive",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px",
+      cursor: "pointer",
+      boxShadow: "0 8px 20px rgba(255,107,53,0.35)"
+    }
+  }, "Ver cardápio ", /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 20
+  })))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      textAlign: "center",
+      color: "rgba(255,255,255,0.6)",
+      fontSize: "12px",
+      marginTop: "20px"
+    }
+  }, "Cada mesa tem seu próprio QR code · Sem precisar chamar o garçom")));
 }
-
-function MenuItemCard({ item, qty, onAdd, onRemove }) {
-  return (
-    <div style={{ background: "white", borderRadius: "16px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 2px 8px rgba(11,79,108,0.08)", border: "1px solid #EEEAE0" }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#1A2B2E", margin: 0, fontFamily: "'Baloo 2', cursive" }}>{item.name}</h3>
-        {item.desc && <p style={{ fontSize: "12px", color: "#7A7568", margin: "3px 0 0", lineHeight: 1.35 }}>{item.desc}</p>}
-        <p style={{ fontSize: "15px", fontWeight: 700, color: "#0B4F6C", margin: "6px 0 0" }}>{fmt(item.price)}</p>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-        {qty > 0 && (
-          <>
-            <button onClick={() => onRemove(item.id)} style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #FF6B35", background: "white", color: "#FF6B35", cursor: "pointer", fontSize: "16px" }}>−</button>
-            <span style={{ minWidth: "20px", textAlign: "center", fontWeight: 700, color: "#1A2B2E" }}>{qty}</span>
-          </>
-        )}
-        <button onClick={() => onAdd(item.id)} style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#FF6B35", color: "white", cursor: "pointer", boxShadow: "0 3px 8px rgba(255,107,53,0.4)", fontSize: "16px" }}>+</button>
-      </div>
-    </div>
-  );
+function MenuItemCard({
+  item,
+  qty,
+  onAdd,
+  onRemove
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "white",
+      borderRadius: "16px",
+      padding: "14px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      boxShadow: "0 2px 8px rgba(11,79,108,0.08)",
+      border: "1px solid #EEEAE0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: "15px",
+      fontWeight: 700,
+      color: "#1A2B2E",
+      margin: 0,
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, item.name), item.desc && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "12px",
+      color: "#7A7568",
+      margin: "3px 0 0",
+      lineHeight: 1.35
+    }
+  }, item.desc), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "15px",
+      fontWeight: 700,
+      color: "#0B4F6C",
+      margin: "6px 0 0"
+    }
+  }, fmt(item.price))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      flexShrink: 0
+    }
+  }, qty > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onRemove(item.id),
+    style: {
+      width: "30px",
+      height: "30px",
+      borderRadius: "50%",
+      border: "1.5px solid #FF6B35",
+      background: "white",
+      color: "#FF6B35",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Minus, {
+    size: 15
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      minWidth: "20px",
+      textAlign: "center",
+      fontWeight: 700,
+      color: "#1A2B2E"
+    }
+  }, qty)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onAdd(item.id),
+    style: {
+      width: "30px",
+      height: "30px",
+      borderRadius: "50%",
+      border: "none",
+      background: "#FF6B35",
+      color: "white",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      boxShadow: "0 3px 8px rgba(255,107,53,0.4)"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 15
+  }))));
 }
-
-function CartSheet({ open, onClose, cartItems, onAdd, onRemove, onConfirm, total, sending }) {
+function CartSheet({
+  open,
+  onClose,
+  cartItems,
+  onAdd,
+  onRemove,
+  onConfirm,
+  total,
+  sending
+}) {
   if (!open) return null;
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(11,30,40,0.5)" }} />
-      <div style={{ position: "relative", background: "#F7F4ED", borderRadius: "24px 24px 0 0", maxHeight: "78vh", display: "flex", flexDirection: "column", boxShadow: "0 -10px 40px rgba(0,0,0,0.3)", maxWidth: "480px", margin: "0 auto", width: "100%" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #E5E0D4", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "20px", margin: 0, color: "#1A2B2E" }}>🛒 Seu pedido</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#7A7568", fontSize: "22px" }}>✕</button>
-        </div>
-        <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1 }}>
-          {cartItems.length === 0 ? (
-            <p style={{ color: "#7A7568", textAlign: "center", padding: "30px 0" }}>Seu carrinho está vazio 🏖️</p>
-          ) : (
-            cartItems.map(({ item, qty }) => (
-              <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #EEEAE0" }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: "14px", color: "#1A2B2E" }}>{item.name}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#0B4F6C", fontWeight: 600 }}>{fmt(item.price)} × {qty} = {fmt(item.price * qty)}</p>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button onClick={() => onRemove(item.id)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid #FF6B35", background: "white", color: "#FF6B35", cursor: "pointer" }}>−</button>
-                  <span style={{ minWidth: "16px", textAlign: "center", fontWeight: 700, fontSize: "13px" }}>{qty}</span>
-                  <button onClick={() => onAdd(item.id)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "none", background: "#FF6B35", color: "white", cursor: "pointer" }}>+</button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-        <div style={{ padding: "16px 20px 24px", borderTop: "1px solid #E5E0D4", background: "white" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-            <span style={{ fontWeight: 600, color: "#1A2B2E" }}>Total</span>
-            <span style={{ fontWeight: 800, fontSize: "19px", color: "#0B4F6C" }}>{fmt(total)}</span>
-          </div>
-          <button disabled={cartItems.length === 0 || sending} onClick={onConfirm}
-            style={{ width: "100%", background: cartItems.length && !sending ? "#1F8A70" : "#C9C4B6", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontSize: "16px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", cursor: cartItems.length ? "pointer" : "not-allowed" }}>
-            {sending ? <span className="spin">⏳</span> : "✓"} {sending ? "Enviando..." : "Enviar pedido ao garçom"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 50,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      position: "absolute",
+      inset: 0,
+      background: "rgba(11,30,40,0.5)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      background: "#F7F4ED",
+      borderRadius: "24px 24px 0 0",
+      maxHeight: "78vh",
+      display: "flex",
+      flexDirection: "column",
+      boxShadow: "0 -10px 40px rgba(0,0,0,0.3)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 20px",
+      borderBottom: "1px solid #E5E0D4",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      fontSize: "20px",
+      margin: 0,
+      color: "#1A2B2E",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px"
+    }
+  }, /*#__PURE__*/React.createElement(ShoppingCart, {
+    size: 20,
+    color: "#FF6B35"
+  }), " Seu pedido"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "#7A7568"
+    }
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 22
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowY: "auto",
+      padding: "12px 20px",
+      flex: 1
+    }
+  }, cartItems.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#7A7568",
+      textAlign: "center",
+      padding: "30px 0"
+    }
+  }, "Seu carrinho está vazio 🏖️") : cartItems.map(({
+    item,
+    qty
+  }) => /*#__PURE__*/React.createElement("div", {
+    key: item.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "10px 0",
+      borderBottom: "1px solid #EEEAE0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontWeight: 600,
+      fontSize: "14px",
+      color: "#1A2B2E"
+    }
+  }, item.name), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "2px 0 0",
+      fontSize: "12.5px",
+      color: "#0B4F6C",
+      fontWeight: 600
+    }
+  }, fmt(item.price), " × ", qty, " = ", fmt(item.price * qty))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onRemove(item.id),
+    style: {
+      width: "26px",
+      height: "26px",
+      borderRadius: "50%",
+      border: "1.5px solid #FF6B35",
+      background: "white",
+      color: "#FF6B35",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Minus, {
+    size: 13
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      minWidth: "16px",
+      textAlign: "center",
+      fontWeight: 700,
+      fontSize: "13px"
+    }
+  }, qty), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onAdd(item.id),
+    style: {
+      width: "26px",
+      height: "26px",
+      borderRadius: "50%",
+      border: "none",
+      background: "#FF6B35",
+      color: "white",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 13
+  })))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 20px 24px",
+      borderTop: "1px solid #E5E0D4",
+      background: "white"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: "12px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600,
+      color: "#1A2B2E"
+    }
+  }, "Total"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 800,
+      fontSize: "19px",
+      color: "#0B4F6C"
+    }
+  }, fmt(total))), /*#__PURE__*/React.createElement("button", {
+    disabled: cartItems.length === 0 || sending,
+    onClick: onConfirm,
+    style: {
+      width: "100%",
+      background: cartItems.length && !sending ? "#1F8A70" : "#C9C4B6",
+      color: "white",
+      border: "none",
+      borderRadius: "14px",
+      padding: "14px",
+      fontSize: "16px",
+      fontWeight: 700,
+      fontFamily: "'Baloo 2', cursive",
+      cursor: cartItems.length ? "pointer" : "not-allowed",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px"
+    }
+  }, sending ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Loader2, {
+    size: 18,
+    className: "spin"
+  }), " Enviando...") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+    size: 20
+  }), " Enviar pedido ao garçom")))));
 }
-
-function PaymentScreen({ total, onPaid, paymentStatus, paymentMethod }) {
+function PaymentScreen({
+  total,
+  onPaid,
+  paymentStatus,
+  paymentMethod
+}) {
   const [method, setMethod] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
-
   if (paymentStatus === "paid") return null;
 
+  // já escolheu um método e está esperando o garçom confirmar
   if (paymentStatus === "aguardando_confirmacao") {
-    return (
-      <div style={{ padding: "40px 24px", textAlign: "center" }}>
-        <div className="spin" style={{ fontSize: "32px", marginBottom: "16px" }}>⏳</div>
-        <p style={{ fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive", fontSize: "16px" }}>
-          Aguardando o garçom confirmar seu pagamento via {paymentMethod === "pix" ? "Pix" : "cartão"}...
-        </p>
-      </div>
-    );
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "40px 24px",
+        textAlign: "center"
+      }
+    }, /*#__PURE__*/React.createElement(Loader2, {
+      className: "spin",
+      size: 32,
+      color: "#0B4F6C",
+      style: {
+        marginBottom: "16px"
+      }
+    }), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontWeight: 700,
+        color: "#1A2B2E",
+        fontFamily: "'Baloo 2', cursive",
+        fontSize: "16px"
+      }
+    }, "Aguardando o garçom confirmar seu pagamento via ", paymentMethod === "pix" ? "Pix" : "cartão", "..."));
   }
-
   const handleCardRequest = () => {
     setProcessing(true);
     setTimeout(() => {
       setProcessing(false);
       onPaid("cartao", "aguardando_confirmacao");
-    }, 800);
+    }, 1200);
   };
-
   const handlePixConfirm = () => onPaid("pix", "aguardando_confirmacao");
-
   const copyPix = () => {
     navigator.clipboard?.writeText(PIX_KEY).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  return (
-    <div style={{ padding: "20px 18px 90px" }}>
-      <div style={{ background: "white", borderRadius: "18px", padding: "20px", marginBottom: "18px", boxShadow: "0 2px 10px rgba(11,79,108,0.08)" }}>
-        <p style={{ fontSize: "13px", color: "#7A7568", margin: 0 }}>Total da conta</p>
-        <p style={{ fontSize: "32px", fontWeight: 800, color: "#0B4F6C", margin: "4px 0 0", fontFamily: "'Baloo 2', cursive" }}>{fmt(total)}</p>
-      </div>
-
-      {!method && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <button onClick={() => setMethod("pix")} style={{ display: "flex", alignItems: "center", gap: "14px", background: "white", border: "1.5px solid #EEEAE0", borderRadius: "16px", padding: "16px", cursor: "pointer", textAlign: "left" }}>
-            <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#E6F5EF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>💧</div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive" }}>Pagar com Pix</p>
-              <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#7A7568" }}>Copie a chave e confirme depois</p>
-            </div>
-          </button>
-          <button onClick={() => setMethod("cartao")} style={{ display: "flex", alignItems: "center", gap: "14px", background: "white", border: "1.5px solid #EEEAE0", borderRadius: "16px", padding: "16px", cursor: "pointer", textAlign: "left" }}>
-            <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "#FFF1E8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>💳</div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, color: "#1A2B2E", fontFamily: "'Baloo 2', cursive" }}>Pagar com cartão</p>
-              <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#7A7568" }}>Crédito ou débito na maquininha do garçom</p>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {method === "pix" && (
-        <div style={{ background: "white", borderRadius: "16px", padding: "20px", border: "1.5px solid #EEEAE0" }}>
-          <p style={{ fontWeight: 700, color: "#1A2B2E", marginTop: 0, fontFamily: "'Baloo 2', cursive" }}>Pagar com Pix</p>
-          <p style={{ fontSize: "13px", color: "#7A7568", margin: "0 0 14px" }}>Chave Pix (telefone) — {PIX_NAME}</p>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#F7F4ED", borderRadius: "12px", padding: "12px 14px", marginBottom: "16px" }}>
-            <span style={{ fontWeight: 700, color: "#0B4F6C", flex: 1, fontSize: "15px" }}>{PIX_KEY}</span>
-            <button onClick={copyPix} style={{ background: copied ? "#1F8A70" : "#0B4F6C", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}>{copied ? "Copiado!" : "Copiar"}</button>
-          </div>
-          <p style={{ fontSize: "12.5px", color: "#7A7568", marginBottom: "16px" }}>Faça o Pix de {fmt(total)} e toque no botão abaixo. O garçom vai confirmar o recebimento.</p>
-          <button onClick={handlePixConfirm} style={{ width: "100%", background: "#1F8A70", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", fontSize: "15px", cursor: "pointer" }}>Já fiz o Pix</button>
-          <button onClick={() => setMethod(null)} style={{ width: "100%", background: "none", border: "none", color: "#7A7568", padding: "12px", fontSize: "13px", cursor: "pointer" }}>Voltar</button>
-        </div>
-      )}
-
-      {method === "cartao" && (
-        <div style={{ background: "white", borderRadius: "16px", padding: "20px", border: "1.5px solid #EEEAE0" }}>
-          <p style={{ fontWeight: 700, color: "#1A2B2E", marginTop: 0, fontFamily: "'Baloo 2', cursive" }}>Pagar com cartão</p>
-          <p style={{ fontSize: "13px", color: "#7A7568", margin: "0 0 16px" }}>O garçom vai até sua mesa com a maquininha para você pagar com crédito ou débito.</p>
-          <button onClick={handleCardRequest} disabled={processing} style={{ width: "100%", background: "#FF6B35", color: "white", border: "none", borderRadius: "14px", padding: "14px", fontWeight: 700, fontFamily: "'Baloo 2', cursive", fontSize: "15px", cursor: "pointer" }}>
-            {processing ? "Chamando garçom..." : "Chamar garçom com a maquininha"}
-          </button>
-          <button onClick={() => setMethod(null)} style={{ width: "100%", background: "none", border: "none", color: "#7A7568", padding: "12px", fontSize: "13px", cursor: "pointer" }}>Voltar</button>
-        </div>
-      )}
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 18px 90px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "white",
+      borderRadius: "18px",
+      padding: "20px",
+      marginBottom: "18px",
+      boxShadow: "0 2px 10px rgba(11,79,108,0.08)"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "13px",
+      color: "#7A7568",
+      margin: 0
+    }
+  }, "Total da conta"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "32px",
+      fontWeight: 800,
+      color: "#0B4F6C",
+      margin: "4px 0 0",
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, fmt(total))), !method && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMethod("pix"),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "14px",
+      background: "white",
+      border: "1.5px solid #EEEAE0",
+      borderRadius: "16px",
+      padding: "16px",
+      cursor: "pointer",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "44px",
+      height: "44px",
+      borderRadius: "12px",
+      background: "#E6F5EF",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Droplets, {
+    size: 22,
+    color: "#1F8A70"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontWeight: 700,
+      color: "#1A2B2E",
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, "Pagar com Pix"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "2px 0 0",
+      fontSize: "12.5px",
+      color: "#7A7568"
+    }
+  }, "Copie a chave e confirme depois")), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    color: "#C9C4B6",
+    style: {
+      marginLeft: "auto"
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMethod("cartao"),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "14px",
+      background: "white",
+      border: "1.5px solid #EEEAE0",
+      borderRadius: "16px",
+      padding: "16px",
+      cursor: "pointer",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "44px",
+      height: "44px",
+      borderRadius: "12px",
+      background: "#FFF1E8",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(CreditCard, {
+    size: 22,
+    color: "#FF6B35"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontWeight: 700,
+      color: "#1A2B2E",
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, "Pagar com cartão"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "2px 0 0",
+      fontSize: "12.5px",
+      color: "#7A7568"
+    }
+  }, "Crédito ou débito na maquininha do garçom")), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    color: "#C9C4B6",
+    style: {
+      marginLeft: "auto"
+    }
+  }))), method === "pix" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "white",
+      borderRadius: "16px",
+      padding: "20px",
+      border: "1.5px solid #EEEAE0"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontWeight: 700,
+      color: "#1A2B2E",
+      marginTop: 0,
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, "Pagar com Pix"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "13px",
+      color: "#7A7568",
+      margin: "0 0 14px"
+    }
+  }, "Chave Pix (telefone) — ", PIX_NAME), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      background: "#F7F4ED",
+      borderRadius: "12px",
+      padding: "12px 14px",
+      marginBottom: "16px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      color: "#0B4F6C",
+      flex: 1,
+      fontSize: "15px"
+    }
+  }, PIX_KEY), /*#__PURE__*/React.createElement("button", {
+    onClick: copyPix,
+    style: {
+      background: copied ? "#1F8A70" : "#0B4F6C",
+      color: "white",
+      border: "none",
+      borderRadius: "8px",
+      padding: "6px 12px",
+      fontSize: "12.5px",
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, copied ? "Copiado!" : "Copiar")), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "12.5px",
+      color: "#7A7568",
+      marginBottom: "16px"
+    }
+  }, "Faça o Pix de ", fmt(total), " e toque no botão abaixo. O garçom vai confirmar o recebimento."), /*#__PURE__*/React.createElement("button", {
+    onClick: handlePixConfirm,
+    style: {
+      width: "100%",
+      background: "#1F8A70",
+      color: "white",
+      border: "none",
+      borderRadius: "14px",
+      padding: "14px",
+      fontWeight: 700,
+      fontFamily: "'Baloo 2', cursive",
+      fontSize: "15px",
+      cursor: "pointer"
+    }
+  }, "Já fiz o Pix"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMethod(null),
+    style: {
+      width: "100%",
+      background: "none",
+      border: "none",
+      color: "#7A7568",
+      padding: "12px",
+      fontSize: "13px",
+      cursor: "pointer"
+    }
+  }, "Voltar")), method === "cartao" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "white",
+      borderRadius: "16px",
+      padding: "20px",
+      border: "1.5px solid #EEEAE0"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontWeight: 700,
+      color: "#1A2B2E",
+      marginTop: 0,
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, "Pagar com cartão"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: "13px",
+      color: "#7A7568",
+      margin: "0 0 16px"
+    }
+  }, "O garçom vai até sua mesa com a maquininha para você pagar com crédito ou débito."), /*#__PURE__*/React.createElement("button", {
+    onClick: handleCardRequest,
+    disabled: processing,
+    style: {
+      width: "100%",
+      background: "#FF6B35",
+      color: "white",
+      border: "none",
+      borderRadius: "14px",
+      padding: "14px",
+      fontWeight: 700,
+      fontFamily: "'Baloo 2', cursive",
+      fontSize: "15px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px"
+    }
+  }, processing ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Loader2, {
+    size: 18,
+    className: "spin"
+  }), " Chamando garçom...") : "Chamar garçom com a maquininha"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMethod(null),
+    style: {
+      width: "100%",
+      background: "none",
+      border: "none",
+      color: "#7A7568",
+      padding: "12px",
+      fontSize: "13px",
+      cursor: "pointer"
+    }
+  }, "Voltar")));
 }
-
-function SuccessScreen({ name }) {
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(165deg, #0B4F6C 0%, #1F8A70 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px", textAlign: "center" }}>
-      <div style={{ width: "84px", height: "84px", borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px", fontSize: "40px" }}>🎉</div>
-      <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "white", fontSize: "26px", margin: 0 }}>Obrigada, {name.split(" ")[0]}!</h1>
-      <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "14.5px", marginTop: "8px", maxWidth: "280px" }}>Seu pagamento foi confirmado. Esperamos te ver de novo em breve, volte sempre! 🌴</p>
-      <div style={{ display: "flex", gap: "14px", marginTop: "32px" }}>
-        <a href={SOCIAL.whatsapp} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#25D366", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", textDecoration: "none" }}>💬</a>
-        <a href={SOCIAL.instagram} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#E1306C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", textDecoration: "none" }}>📷</a>
-        <a href={SOCIAL.facebook} target="_blank" rel="noreferrer" style={{ width: "52px", height: "52px", borderRadius: "16px", background: "#1877F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "white", textDecoration: "none", fontWeight: 700 }}>f</a>
-      </div>
-      <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "12px", marginTop: "28px" }}>Siga a gente e fique por dentro das novidades da praia</p>
-    </div>
-  );
+function SuccessScreen({
+  name
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "linear-gradient(165deg, #0B4F6C 0%, #1F8A70 100%)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "32px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "84px",
+      height: "84px",
+      borderRadius: "50%",
+      background: "rgba(255,255,255,0.15)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: "20px"
+    }
+  }, /*#__PURE__*/React.createElement(PartyPopper, {
+    size: 42,
+    color: "#FFD23F"
+  })), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      color: "white",
+      fontSize: "26px",
+      margin: 0
+    }
+  }, "Obrigada, ", name.split(" ")[0], "!"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.85)",
+      fontSize: "14.5px",
+      marginTop: "8px",
+      maxWidth: "280px"
+    }
+  }, "Seu pagamento foi confirmado. Esperamos te ver de novo em breve, volte sempre! 🌴"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: "14px",
+      marginTop: "32px"
+    }
+  }, /*#__PURE__*/React.createElement("a", {
+    href: SOCIAL.whatsapp,
+    target: "_blank",
+    rel: "noreferrer",
+    style: {
+      width: "52px",
+      height: "52px",
+      borderRadius: "16px",
+      background: "#25D366",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 6px 16px rgba(0,0,0,0.2)"
+    }
+  }, /*#__PURE__*/React.createElement(MessageCircle, {
+    size: 26,
+    color: "white"
+  })), /*#__PURE__*/React.createElement("a", {
+    href: SOCIAL.instagram,
+    target: "_blank",
+    rel: "noreferrer",
+    style: {
+      width: "52px",
+      height: "52px",
+      borderRadius: "16px",
+      background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 6px 16px rgba(0,0,0,0.2)"
+    }
+  }, /*#__PURE__*/React.createElement(Instagram, {
+    size: 26,
+    color: "white"
+  })), /*#__PURE__*/React.createElement("a", {
+    href: SOCIAL.facebook,
+    target: "_blank",
+    rel: "noreferrer",
+    style: {
+      width: "52px",
+      height: "52px",
+      borderRadius: "16px",
+      background: "#1877F2",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 6px 16px rgba(0,0,0,0.2)"
+    }
+  }, /*#__PURE__*/React.createElement(Facebook, {
+    size: 26,
+    color: "white"
+  }))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.55)",
+      fontSize: "12px",
+      marginTop: "28px"
+    }
+  }, "Siga a gente e fique por dentro das novidades da praia"));
 }
-
-function StatusBadge({ status }) {
+function StatusBadge({
+  status
+}) {
   const map = {
-    pendente: { label: "Aguardando", color: "#FF6B35", bg: "#FFF1E8" },
-    preparo: { label: "Em preparo", color: "#0B4F6C", bg: "#E6F0F5" },
-    entregue: { label: "Entregue", color: "#1F8A70", bg: "#E6F5EF" },
+    pendente: {
+      label: "Aguardando",
+      color: "#FF6B35",
+      bg: "#FFF1E8"
+    },
+    preparo: {
+      label: "Em preparo",
+      color: "#0B4F6C",
+      bg: "#E6F0F5"
+    },
+    entregue: {
+      label: "Entregue",
+      color: "#1F8A70",
+      bg: "#E6F5EF"
+    }
   };
   const s = map[status] || map.pendente;
-  return <span style={{ fontSize: "11.5px", fontWeight: 700, color: s.color, background: s.bg, padding: "4px 10px", borderRadius: "999px" }}>{s.label}</span>;
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: "11.5px",
+      fontWeight: 700,
+      color: s.color,
+      background: s.bg,
+      padding: "4px 10px",
+      borderRadius: "999px"
+    }
+  }, s.label);
 }
 
-function App() {
+// ============================================================
+// APP PRINCIPAL
+// ============================================================
+function TropicalBarApp() {
   const mesa = getMesaFromURL();
-  const { db, ready, authError } = useFirebase();
+  const {
+    db,
+    ready
+  } = useFirebase();
   const [user, setUser] = useState(null);
   const [cart, setCart] = useState({});
   const [pedidos, setPedidos] = useState([]);
-  const [tableDoc, setTableDoc] = useState({ paymentStatus: "unpaid", paymentMethod: null });
+  const [tableDoc, setTableDoc] = useState({
+    paymentStatus: "unpaid",
+    paymentMethod: null
+  });
   const [activeCat, setActiveCat] = useState("bebidas");
   const [cartOpen, setCartOpen] = useState(false);
   const [view, setView] = useState("menu");
   const [sending, setSending] = useState(false);
 
+  // listener em tempo real: documento da mesa
   useEffect(() => {
     if (!db) return;
-    const unsub = db.collection("mesas").doc(mesa).onSnapshot((doc) => {
+    const unsub = db.collection("mesas").doc(mesa).onSnapshot(doc => {
       if (doc.exists) setTableDoc(doc.data());
-    }, (err) => console.error("Erro listener mesa:", err));
+    });
     return unsub;
   }, [db, mesa]);
 
+  // listener em tempo real: subcoleção de pedidos da mesa
   useEffect(() => {
     if (!db) return;
-    const unsub = db.collection("mesas").doc(mesa).collection("pedidos")
-      .orderBy("sentAt", "asc")
-      .onSnapshot((snap) => {
-        setPedidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }, (err) => console.error("Erro listener pedidos:", err));
+    const unsub = db.collection("mesas").doc(mesa).collection("pedidos").orderBy("sentAt", "asc").onSnapshot(snap => {
+      setPedidos(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })));
+    });
     return unsub;
   }, [db, mesa]);
-
-  const allItems = Object.values(MENU).flatMap((c) => c.items);
-  const addToCart = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
-  const removeFromCart = (id) => setCart((c) => {
-    const next = { ...c, [id]: Math.max(0, (c[id] || 0) - 1) };
+  const allItems = Object.values(MENU).flatMap(c => c.items);
+  const addToCart = id => setCart(c => ({
+    ...c,
+    [id]: (c[id] || 0) + 1
+  }));
+  const removeFromCart = id => setCart(c => {
+    const next = {
+      ...c,
+      [id]: Math.max(0, (c[id] || 0) - 1)
+    };
     if (next[id] === 0) delete next[id];
     return next;
   });
-
-  const cartItems = Object.entries(cart).map(([id, qty]) => ({ item: allItems.find((i) => i.id === id), qty }));
-  const cartTotal = cartItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
+  const cartItems = Object.entries(cart).map(([id, qty]) => ({
+    item: allItems.find(i => i.id === id),
+    qty
+  }));
+  const cartTotal = cartItems.reduce((s, {
+    item,
+    qty
+  }) => s + item.price * qty, 0);
   const cartCount = Object.values(cart).reduce((s, q) => s + q, 0);
   const orderTotal = pedidos.reduce((s, i) => s + i.price * i.qty, 0);
-
   const confirmOrder = async () => {
     if (!db) return;
     setSending(true);
     try {
       const tableRef = db.collection("mesas").doc(mesa);
-      await tableRef.set({ cliente: user, paymentStatus: tableDoc.paymentStatus || "unpaid" }, { merge: true });
+      // garante que o doc da mesa existe com os dados do cliente
+      await tableRef.set({
+        cliente: user,
+        paymentStatus: tableDoc.paymentStatus || "unpaid"
+      }, {
+        merge: true
+      });
       const batch = db.batch();
-      cartItems.forEach(({ item, qty }) => {
+      cartItems.forEach(({
+        item,
+        qty
+      }) => {
         const ref = tableRef.collection("pedidos").doc();
         batch.set(ref, {
           itemId: item.id,
@@ -452,7 +1485,7 @@ function App() {
           price: item.price,
           qty,
           status: "pendente",
-          sentAt: firebase.firestore.FieldValue.serverTimestamp(),
+          sentAt: window.firebase.firestore.FieldValue.serverTimestamp()
         });
       });
       await batch.commit();
@@ -460,131 +1493,332 @@ function App() {
       setCartOpen(false);
     } catch (e) {
       console.error("Erro ao enviar pedido:", e);
-      alert("Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.");
     } finally {
       setSending(false);
     }
   };
-
   const handlePaid = async (method, status) => {
     if (!db) return;
-    await db.collection("mesas").doc(mesa).set({ paymentMethod: method, paymentStatus: status }, { merge: true });
+    await db.collection("mesas").doc(mesa).set({
+      paymentMethod: method,
+      paymentStatus: status
+    }, {
+      merge: true
+    });
   };
-
   if (!ready) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="spin" style={{ fontSize: "32px" }}>🌴</div>
-      </div>
-    );
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        minHeight: "100vh",
+        background: "#0B4F6C",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement(Loader2, {
+      className: "spin",
+      size: 32,
+      color: "white"
+    }));
   }
-
-  if (authError) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", textAlign: "center" }}>
-        <p style={{ color: "white", fontWeight: 700, marginBottom: "8px" }}>Não foi possível conectar</p>
-        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>Verifique se o login Anônimo está ativado no Firebase Authentication.</p>
-      </div>
-    );
-  }
-
-  if (!user) return <LoginScreen mesa={mesa} onLogin={setUser} />;
-  if (tableDoc.paymentStatus === "paid") return <SuccessScreen name={user.name} />;
-
-  return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: "#F7F4ED", minHeight: "100vh", paddingBottom: cartCount > 0 ? "84px" : "0" }}>
-      <div style={{ background: "linear-gradient(135deg, #0B4F6C, #0E6B8F)", padding: "18px 18px 0", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "-30px", right: "-20px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,210,63,0.25)" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
-          <div>
-            <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "12.5px", margin: 0 }}>Olá, {user.name.split(" ")[0]} 👋</p>
-            <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "#FFD23F", fontSize: "24px", margin: "2px 0 0" }}>Tropical Bar</h1>
-          </div>
-          <div style={{ background: "rgba(255,255,255,0.15)", color: "white", fontWeight: 700, fontSize: "12.5px", padding: "8px 12px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.25)" }}>📷 Mesa {mesa}</div>
-        </div>
-
-        {pedidos.length > 0 && (
-          <button onClick={() => setView(view === "payment" ? "menu" : "payment")}
-            style={{ marginTop: "14px", width: "100%", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "14px", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", color: "white", cursor: "pointer" }}>
-            <span style={{ fontSize: "13px" }}>🧾 Sua conta até agora: <strong>{fmt(orderTotal)}</strong></span>
-            <span>→</span>
-          </button>
-        )}
-
-        <div style={{ height: "16px" }} />
-        <WaveDivider fill="#F7F4ED" />
-      </div>
-
-      {view === "payment" ? (
-        <>
-          <div style={{ padding: "16px 18px 0", display: "flex", alignItems: "center", gap: "10px" }}>
-            <button onClick={() => setView("menu")} style={{ background: "white", border: "1px solid #EEEAE0", borderRadius: "10px", width: "36px", height: "36px", cursor: "pointer" }}>←</button>
-            <h2 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "19px", color: "#1A2B2E", margin: 0 }}>Fechar a conta</h2>
-          </div>
-          <div style={{ padding: "0 18px" }}>
-            {pedidos.map((i) => (
-              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: "13.5px", color: "#3A3530" }}>
-                <span>{i.qty}× {i.name}</span>
-                <span style={{ fontWeight: 600 }}>{fmt(i.price * i.qty)}</span>
-              </div>
-            ))}
-          </div>
-          <PaymentScreen total={orderTotal} onPaid={handlePaid} paymentStatus={tableDoc.paymentStatus} paymentMethod={tableDoc.paymentMethod} />
-        </>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: "10px", padding: "14px 18px 6px", overflowX: "auto" }}>
-            {Object.entries(MENU).map(([key, cat]) => {
-              const active = activeCat === key;
-              return (
-                <button key={key} onClick={() => setActiveCat(key)}
-                  style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px", borderRadius: "999px", border: active ? "none" : "1.5px solid #E5E0D4", background: active ? "#FF6B35" : "white", color: active ? "white" : "#5A5648", fontWeight: 700, fontSize: "13.5px", cursor: "pointer", fontFamily: "'Baloo 2', cursive" }}>
-                  {cat.emoji} {cat.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ padding: "12px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            {MENU[activeCat].items.map((item) => (
-              <MenuItemCard key={item.id} item={item} qty={cart[item.id] || 0} onAdd={addToCart} onRemove={removeFromCart} />
-            ))}
-          </div>
-
-          {pedidos.length > 0 && (
-            <div style={{ padding: "4px 18px 24px" }}>
-              <h3 style={{ fontFamily: "'Baloo 2', cursive", fontSize: "15px", color: "#1A2B2E", margin: "8px 0" }}>Pedidos enviados</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {pedidos.slice().reverse().map((i) => (
-                  <div key={i.id} style={{ background: "white", borderRadius: "12px", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #EEEAE0" }}>
-                    <span style={{ fontSize: "13.5px", color: "#1A2B2E" }}>{i.qty}× {i.name}</span>
-                    <StatusBadge status={i.status} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {cartCount > 0 && view === "menu" && (
-        <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: "480px", padding: "12px 18px 18px", background: "linear-gradient(to top, #F7F4ED 70%, transparent)" }}>
-          <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: "#1A2B2E", color: "white", border: "none", borderRadius: "16px", padding: "15px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", boxShadow: "0 10px 24px rgba(0,0,0,0.25)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 700, fontFamily: "'Baloo 2', cursive" }}>
-              <span style={{ background: "#FF6B35", borderRadius: "50%", width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12.5px" }}>{cartCount}</span>
-              Ver pedido
-            </span>
-            <span style={{ fontWeight: 800 }}>{fmt(cartTotal)}</span>
-          </button>
-        </div>
-      )}
-
-      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} cartItems={cartItems} onAdd={addToCart} onRemove={removeFromCart} onConfirm={confirmOrder} total={cartTotal} sending={sending} />
-    </div>
-  );
+  if (!user) return /*#__PURE__*/React.createElement(LoginScreen, {
+    mesa: mesa,
+    onLogin: setUser
+  });
+  if (tableDoc.paymentStatus === "paid") return /*#__PURE__*/React.createElement(SuccessScreen, {
+    name: user.name
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter', sans-serif",
+      background: "#F7F4ED",
+      minHeight: "100vh",
+      paddingBottom: cartCount > 0 ? "84px" : "0"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { display: none; }
+      `), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(135deg, #0B4F6C, #0E6B8F)",
+      padding: "18px 18px 0",
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "-30px",
+      right: "-20px",
+      width: "120px",
+      height: "120px",
+      borderRadius: "50%",
+      background: "rgba(255,210,63,0.25)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      position: "relative",
+      zIndex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.75)",
+      fontSize: "12.5px",
+      margin: 0
+    }
+  }, "Olá, ", user.name.split(" ")[0], " 👋"), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      color: "#FFD23F",
+      fontSize: "24px",
+      margin: "2px 0 0"
+    }
+  }, "Tropical Bar")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(255,255,255,0.15)",
+      color: "white",
+      fontWeight: 700,
+      fontSize: "12.5px",
+      padding: "8px 12px",
+      borderRadius: "12px",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      border: "1px solid rgba(255,255,255,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement(QrCode, {
+    size: 14
+  }), " Mesa ", mesa)), pedidos.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView(view === "payment" ? "menu" : "payment"),
+    style: {
+      marginTop: "14px",
+      width: "100%",
+      background: "rgba(255,255,255,0.12)",
+      border: "1px solid rgba(255,255,255,0.25)",
+      borderRadius: "14px",
+      padding: "10px 14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      color: "white",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      fontSize: "13px"
+    }
+  }, /*#__PURE__*/React.createElement(Receipt, {
+    size: 16,
+    color: "#FFD23F"
+  }), " Sua conta até agora: ", /*#__PURE__*/React.createElement("strong", null, fmt(orderTotal))), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 16
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: "16px"
+    }
+  }), /*#__PURE__*/React.createElement(WaveDivider, {
+    fill: "#F7F4ED"
+  })), view === "payment" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 18px 0",
+      display: "flex",
+      alignItems: "center",
+      gap: "10px"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("menu"),
+    style: {
+      background: "white",
+      border: "1px solid #EEEAE0",
+      borderRadius: "10px",
+      width: "36px",
+      height: "36px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeft, {
+    size: 18,
+    color: "#1A2B2E"
+  })), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      fontSize: "19px",
+      color: "#1A2B2E",
+      margin: 0
+    }
+  }, "Fechar a conta")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 18px"
+    }
+  }, pedidos.map(i => /*#__PURE__*/React.createElement("div", {
+    key: i.id,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      padding: "8px 0",
+      fontSize: "13.5px",
+      color: "#3A3530"
+    }
+  }, /*#__PURE__*/React.createElement("span", null, i.qty, "× ", i.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600
+    }
+  }, fmt(i.price * i.qty))))), /*#__PURE__*/React.createElement(PaymentScreen, {
+    total: orderTotal,
+    onPaid: handlePaid,
+    paymentStatus: tableDoc.paymentStatus,
+    paymentMethod: tableDoc.paymentMethod
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: "10px",
+      padding: "14px 18px 6px",
+      overflowX: "auto"
+    }
+  }, Object.entries(MENU).map(([key, cat]) => {
+    const Icon = cat.icon;
+    const active = activeCat === key;
+    return /*#__PURE__*/React.createElement("button", {
+      key: key,
+      onClick: () => setActiveCat(key),
+      style: {
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "10px 16px",
+        borderRadius: "999px",
+        border: active ? "none" : "1.5px solid #E5E0D4",
+        background: active ? "#FF6B35" : "white",
+        color: active ? "white" : "#5A5648",
+        fontWeight: 700,
+        fontSize: "13.5px",
+        cursor: "pointer",
+        fontFamily: "'Baloo 2', cursive",
+        boxShadow: active ? "0 4px 12px rgba(255,107,53,0.35)" : "none"
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      size: 16
+    }), " ", cat.label);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "12px 18px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px"
+    }
+  }, MENU[activeCat].items.map(item => /*#__PURE__*/React.createElement(MenuItemCard, {
+    key: item.id,
+    item: item,
+    qty: cart[item.id] || 0,
+    onAdd: addToCart,
+    onRemove: removeFromCart
+  }))), pedidos.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "4px 18px 24px"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: "'Baloo 2', cursive",
+      fontSize: "15px",
+      color: "#1A2B2E",
+      margin: "8px 0"
+    }
+  }, "Pedidos enviados"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px"
+    }
+  }, pedidos.slice().reverse().map(i => /*#__PURE__*/React.createElement("div", {
+    key: i.id,
+    style: {
+      background: "white",
+      borderRadius: "12px",
+      padding: "10px 14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      border: "1px solid #EEEAE0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: "13.5px",
+      color: "#1A2B2E"
+    }
+  }, i.qty, "× ", i.name), /*#__PURE__*/React.createElement(StatusBadge, {
+    status: i.status
+  })))))), cartCount > 0 && view === "menu" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: "12px 18px 18px",
+      background: "linear-gradient(to top, #F7F4ED 70%, transparent)"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCartOpen(true),
+    style: {
+      width: "100%",
+      background: "#1A2B2E",
+      color: "white",
+      border: "none",
+      borderRadius: "16px",
+      padding: "15px 18px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      cursor: "pointer",
+      boxShadow: "0 10px 24px rgba(0,0,0,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      fontWeight: 700,
+      fontFamily: "'Baloo 2', cursive"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: "#FF6B35",
+      borderRadius: "50%",
+      width: "24px",
+      height: "24px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "12.5px"
+    }
+  }, cartCount), "Ver pedido"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 800
+    }
+  }, fmt(cartTotal)))), /*#__PURE__*/React.createElement(CartSheet, {
+    open: cartOpen,
+    onClose: () => setCartOpen(false),
+    cartItems: cartItems,
+    onAdd: addToCart,
+    onRemove: removeFromCart,
+    onConfirm: confirmOrder,
+    total: cartTotal,
+    sending: sending
+  }));
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(TropicalBarApp));
 </script>
 </body>
 </html>
