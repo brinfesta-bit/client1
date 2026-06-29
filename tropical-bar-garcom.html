@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tropical Bar - Painel do Garçom</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #F0EEE6; }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+// ============================================================
+// FIREBASE — mesmo projeto do app do cliente: tropical-bar-gaibu
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBQwSFa7V8tP56pU2kbRVL_vgRu9v5N0YM",
+  authDomain: "tropical-bar-gaibu.firebaseapp.com",
+  projectId: "tropical-bar-gaibu",
+  storageBucket: "tropical-bar-gaibu.firebasestorage.app",
+  messagingSenderId: "329641959238",
+  appId: "1:329641959238:web:60d15e85125e8f05604f47",
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const TABLE_COUNT = 20; // ajuste para o número real de mesas do bar
+
+function useFirebase() {
+  const [ready, setReady] = useState(false);
+  const [db, setDb] = useState(null);
+  const [authError, setAuthError] = useState(null);
+
+  useEffect(() => {
+    firebase.auth().signInAnonymously()
+      .then(() => {
+        setDb(firebase.firestore());
+        setReady(true);
+      })
+      .catch((e) => {
+        console.error("Erro de autenticação:", e);
+        setAuthError(e.message);
+        setReady(true);
+      });
+  }, []);
+
+  return { db, ready, authError };
+}
+
+const fmt = (n) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+
+function timeAgo(ts) {
+  if (!ts) return "agora";
+  const ms = ts.toMillis ? ts.toMillis() : new Date(ts).getTime();
+  const diff = Math.floor((Date.now() - ms) / 60000);
+  if (diff < 1) return "agora";
+  if (diff < 60) return `${diff} min`;
+  return `${Math.floor(diff / 60)}h${diff % 60}min`;
+}
+
+function StatusPill({ status }) {
+  const map = {
+    pendente: { label: "Pendente", color: "#FF6B35", bg: "#FFF1E8", emoji: "🔔" },
+    preparo: { label: "Em preparo", color: "#0B4F6C", bg: "#E6F0F5", emoji: "👨‍🍳" },
+    entregue: { label: "Entregue", color: "#1F8A70", bg: "#E6F5EF", emoji: "✅" },
+  };
+  const s = map[status] || map.pendente;
+  return (
+    <span style={{ fontSize: "11px", fontWeight: 700, color: s.color, background: s.bg, padding: "4px 9px", borderRadius: "999px", whiteSpace: "nowrap" }}>
+      {s.emoji} {s.label}
+    </span>
+  );
+}
+
+function useTable(db, mesa) {
+  const [tableDoc, setTableDoc] = useState({ paymentStatus: "unpaid", paymentMethod: null });
+  const [pedidos, setPedidos] = useState([]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsubDoc = db.collection("mesas").doc(mesa).onSnapshot((doc) => {
+      setTableDoc(doc.exists ? doc.data() : { paymentStatus: "unpaid", paymentMethod: null });
+    });
+    const unsubPedidos = db.collection("mesas").doc(mesa).collection("pedidos")
+      .orderBy("sentAt", "asc")
+      .onSnapshot((snap) => {
+        setPedidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      });
+    return () => { unsubDoc(); unsubPedidos(); };
+  }, [db, mesa]);
+
+  return { tableDoc, pedidos };
+}
+
+function TableCard({ db, mesa }) {
+  const { tableDoc, pedidos } = useTable(db, mesa);
+  const total = pedidos.reduce((s, i) => s + i.price * i.qty, 0);
+  const pendingCount = pedidos.filter((i) => i.status !== "entregue").length;
+  const allDelivered = pedidos.length > 0 && pedidos.every((i) => i.status === "entregue");
+  const hasUnpaid = tableDoc.paymentStatus !== "paid" && pedidos.length > 0;
+
+  let cardColor = "#E5E0D4";
+  if (pendingCount > 0) cardColor = "#FF6B35";
+  else if (hasUnpaid && allDelivered) cardColor = "#FFD23F";
+  else if (tableDoc.paymentStatus === "paid") cardColor = "#1F8A70";
+
+  const updateItemStatus = async (itemId, status) => {
+    await db.collection("mesas").doc(mesa).collection("pedidos").doc(itemId).update({ status });
+  };
+
+  const confirmPayment = async () => {
+    await db.collection("mesas").doc(mesa).set({ paymentStatus: "paid", confirmedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  };
+
+  const closeTable = async () => {
+    const snap = await db.collection("mesas").doc(mesa).collection("pedidos").get();
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    batch.set(db.collection("mesas").doc(mesa), { paymentStatus: "unpaid", paymentMethod: null, cliente: null });
+    await batch.commit();
+  };
+
+  return (
+    <div style={{ background: "white", borderRadius: "18px", overflow: "hidden", border: "1.5px solid #EEEAE0", boxShadow: "0 3px 12px rgba(11,79,108,0.08)" }}>
+      <div style={{ background: cardColor, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "16px" }}>🌊</span>
+          <span style={{ color: "white", fontWeight: 800, fontFamily: "'Baloo 2', cursive", fontSize: "16px" }}>Mesa {mesa}</span>
+        </div>
+        {tableDoc.cliente && (
+          <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "12px", fontWeight: 600 }}>
+            👤 {tableDoc.cliente.name?.split(" ")[0]}
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: "12px 16px" }}>
+        {pedidos.length === 0 ? (
+          <p style={{ color: "#A8A290", fontSize: "13px", textAlign: "center", padding: "10px 0" }}>Sem pedidos ainda</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {pedidos.map((item) => (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "8px 0", borderBottom: "1px solid #F2EFE6" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: "13.5px", fontWeight: 600, color: "#1A2B2E" }}>{item.qty}× {item.name}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#A8A290" }}>{timeAgo(item.sentAt)} · {fmt(item.price * item.qty)}</p>
+                </div>
+                <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                  {item.status !== "entregue" ? (
+                    <>
+                      {item.status === "pendente" && (
+                        <button onClick={() => updateItemStatus(item.id, "preparo")} style={{ fontSize: "11px", fontWeight: 700, background: "#E6F0F5", color: "#0B4F6C", border: "none", borderRadius: "8px", padding: "6px 9px", cursor: "pointer" }}>Preparar</button>
+                      )}
+                      <button onClick={() => updateItemStatus(item.id, "entregue")} style={{ fontSize: "11px", fontWeight: 700, background: "#1F8A70", color: "white", border: "none", borderRadius: "8px", padding: "6px 9px", cursor: "pointer" }}>
+                        ✓ Entregar
+                      </button>
+                    </>
+                  ) : (
+                    <StatusPill status="entregue" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {pedidos.length > 0 && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #F2EFE6" }}>
+              <span style={{ fontWeight: 700, fontSize: "13.5px", color: "#1A2B2E" }}>Total</span>
+              <span style={{ fontWeight: 800, fontSize: "17px", color: "#0B4F6C" }}>{fmt(total)}</span>
+            </div>
+
+            <div style={{ marginTop: "10px" }}>
+              {tableDoc.paymentStatus === "paid" ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", background: "#E6F5EF", color: "#1F8A70", fontWeight: 700, fontSize: "12.5px", borderRadius: "10px", padding: "9px" }}>
+                  ✅ Pago via {tableDoc.paymentMethod === "pix" ? "Pix" : "Cartão"}
+                </div>
+              ) : !tableDoc.paymentMethod ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", background: "#F7F4ED", color: "#A8A290", fontWeight: 600, fontSize: "12px", borderRadius: "10px", padding: "9px" }}>
+                  ⏱️ Cliente ainda não fechou a conta
+                </div>
+              ) : (
+                <button onClick={confirmPayment} style={{ width: "100%", background: "#FFD23F", color: "#1A2B2E", fontWeight: 700, fontFamily: "'Baloo 2', cursive", border: "none", borderRadius: "10px", padding: "10px", cursor: "pointer", fontSize: "13px" }}>
+                  💳 Confirmar recebimento ({tableDoc.paymentMethod === "pix" ? "Pix" : "Cartão"})
+                </button>
+              )}
+            </div>
+
+            {tableDoc.paymentStatus === "paid" && (
+              <button onClick={closeTable} style={{ width: "100%", marginTop: "8px", background: "none", border: "1.5px solid #EEEAE0", color: "#7A7568", fontWeight: 600, borderRadius: "10px", padding: "8px", cursor: "pointer", fontSize: "12px" }}>
+                Encerrar mesa (limpar para próximo cliente)
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const { db, ready, authError } = useFirebase();
+  const [filter, setFilter] = useState("ativas");
+  const [tableSummaries, setTableSummaries] = useState({});
+
+  const allTables = Array.from({ length: TABLE_COUNT }, (_, i) => String(i + 1));
+
+  useEffect(() => {
+    if (!db) return;
+    const unsubs = allTables.map((mesa) => {
+      const unsubDoc = db.collection("mesas").doc(mesa).onSnapshot((doc) => {
+        setTableSummaries((prev) => ({
+          ...prev,
+          [mesa]: { ...(prev[mesa] || {}), table: doc.exists ? doc.data() : { paymentStatus: "unpaid" } },
+        }));
+      });
+      const unsubPedidos = db.collection("mesas").doc(mesa).collection("pedidos").onSnapshot((snap) => {
+        setTableSummaries((prev) => ({
+          ...prev,
+          [mesa]: { ...(prev[mesa] || {}), pedidos: snap.docs.map((d) => ({ id: d.id, ...d.data() })) },
+        }));
+      });
+      return () => { unsubDoc(); unsubPedidos(); };
+    });
+    return () => unsubs.forEach((u) => u());
+  }, [db]);
+
+  const summaryFor = (mesa) => tableSummaries[mesa] || { table: { paymentStatus: "unpaid" }, pedidos: [] };
+
+  const filtered = allTables.filter((mesa) => {
+    const { table, pedidos = [] } = summaryFor(mesa);
+    if (filter === "todas") return true;
+    if (filter === "ativas") return pedidos.length > 0;
+    if (filter === "pendentes") return pedidos.some((i) => i.status !== "entregue");
+    if (filter === "pagamento") return pedidos.length > 0 && pedidos.every((i) => i.status === "entregue") && table.paymentStatus !== "paid";
+    return true;
+  });
+
+  const stats = allTables.reduce((acc, mesa) => {
+    const { table, pedidos = [] } = summaryFor(mesa);
+    if (pedidos.length > 0) acc.mesasAtivas += 1;
+    acc.pendentes += pedidos.filter((i) => i.status !== "entregue").length;
+    if (pedidos.length > 0 && pedidos.every((i) => i.status === "entregue") && table.paymentStatus !== "paid") acc.aguardandoPagamento += 1;
+    return acc;
+  }, { mesasAtivas: 0, pendentes: 0, aguardandoPagamento: 0 });
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div className="spin" style={{ fontSize: "32px" }}>🌴</div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0B4F6C", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px", textAlign: "center" }}>
+        <p style={{ color: "white", fontWeight: 700, marginBottom: "8px" }}>Não foi possível conectar</p>
+        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "13px" }}>Verifique se o login Anônimo está ativado no Firebase Authentication.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: "'Inter', sans-serif", background: "#F0EEE6", minHeight: "100vh" }}>
+      <div style={{ background: "#0B4F6C", padding: "18px 20px", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <h1 style={{ fontFamily: "'Baloo 2', cursive", color: "#FFD23F", fontSize: "20px", margin: 0 }}>
+              👨‍🍳 Painel do Garçom
+            </h1>
+            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "11.5px", margin: "2px 0 0" }}>Tropical Bar · tempo real (Firestore)</p>
+          </div>
+          <div style={{ background: "rgba(31,138,112,0.3)", border: "1px solid rgba(31,138,112,0.5)", borderRadius: "10px", width: "38px", height: "38px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }} title="Conectado em tempo real">
+            🔄
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.1)", borderRadius: "12px", padding: "10px 12px" }}>
+            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "10.5px", margin: 0, textTransform: "uppercase", fontWeight: 700 }}>Mesas ativas</p>
+            <p style={{ color: "white", fontSize: "20px", fontWeight: 800, margin: "2px 0 0", fontFamily: "'Baloo 2', cursive" }}>{stats.mesasAtivas}</p>
+          </div>
+          <div style={{ flex: 1, background: "rgba(255,107,53,0.25)", borderRadius: "12px", padding: "10px 12px" }}>
+            <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "10.5px", margin: 0, textTransform: "uppercase", fontWeight: 700 }}>Itens pendentes</p>
+            <p style={{ color: "#FFD23F", fontSize: "20px", fontWeight: 800, margin: "2px 0 0", fontFamily: "'Baloo 2', cursive" }}>{stats.pendentes}</p>
+          </div>
+          <div style={{ flex: 1, background: "rgba(255,210,63,0.2)", borderRadius: "12px", padding: "10px 12px" }}>
+            <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "10.5px", margin: 0, textTransform: "uppercase", fontWeight: 700 }}>P/ cobrar</p>
+            <p style={{ color: "#FFD23F", fontSize: "20px", fontWeight: 800, margin: "2px 0 0", fontFamily: "'Baloo 2', cursive" }}>{stats.aguardandoPagamento}</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "8px", padding: "14px 20px 0", overflowX: "auto" }}>
+        {[
+          { key: "ativas", label: "Ativas" },
+          { key: "pendentes", label: "Pendentes" },
+          { key: "pagamento", label: "Aguardando pagamento" },
+          { key: "todas", label: "Todas as mesas" },
+        ].map((f) => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            style={{ flexShrink: 0, padding: "8px 14px", borderRadius: "999px", border: filter === f.key ? "none" : "1.5px solid #DDD8C9", background: filter === f.key ? "#FF6B35" : "white", color: filter === f.key ? "white" : "#5A5648", fontWeight: 700, fontSize: "12.5px", cursor: "pointer", fontFamily: "'Baloo 2', cursive" }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: "16px 20px 40px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px" }}>
+        {filtered.length === 0 ? (
+          <p style={{ color: "#A8A290", gridColumn: "1/-1", textAlign: "center", padding: "40px 0" }}>Nenhuma mesa nessa categoria 🏖️</p>
+        ) : (
+          filtered.map((mesa) => <TableCard key={mesa} db={db} mesa={mesa} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
